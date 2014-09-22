@@ -98,7 +98,7 @@ func signup(w http.ResponseWriter, r *http.Request) {
   }
 
   ancestorKey := datastore.NewKey(c, "Diary", "default_diary", 0, nil)
-  cnt, err := datastore.NewQuery("Diary").Ancestor(ancestorKey).Filter("Author =", u.String()).Count(c)
+  cnt, err := datastore.NewQuery("Diary").Ancestor(ancestorKey).Filter("Author =", u.Email).Count(c)
   if err != nil {
     http.Error(w, err.Error(), http.StatusInternalServerError)
     return
@@ -115,7 +115,7 @@ func signup(w http.ResponseWriter, r *http.Request) {
 
     g := Diary {
       CreatedAt: time.Now(),
-      Author: u.String(),
+      Author: u.Email,
       Token: fmt.Sprintf("%x", h.Sum(nil)),
       Entries: entries,
     }
@@ -181,7 +181,7 @@ func diary(w http.ResponseWriter, r *http.Request) {
   u := user.Current(c)
 
   key := datastore.NewKey(c, "Diary", "default_diary", 0, nil)
-  q := datastore.NewQuery("Diary").Ancestor(key).Filter("Author =", u.String()).Order("-CreatedAt").Limit(10)
+  q := datastore.NewQuery("Diary").Ancestor(key).Filter("Author =", u.Email).Order("-CreatedAt").Limit(10)
   greetings := make([]Diary, 0, 10)
   if _, err := q.GetAll(c, &greetings); err != nil {
     http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -233,7 +233,7 @@ func write(w http.ResponseWriter, r *http.Request) {
   u := user.Current(c)
 
   ancestorKey := datastore.NewKey(c, "Diary", "default_diary", 0, nil)
-  q := datastore.NewQuery("Diary").Ancestor(ancestorKey).Filter("Author =", u.String()).Limit(1)
+  q := datastore.NewQuery("Diary").Ancestor(ancestorKey).Filter("Author =", u.Email).Limit(1)
 
   var diaryKeys []*datastore.Key
 
@@ -281,12 +281,11 @@ func dailyMail(w http.ResponseWriter, r *http.Request) {
     t := time.Now().UTC()
     today := t.Format(layout)
 
-    addr := "peter@theill.com"
     url := "http://diary.commanigy.com/"
     msg := &appmail.Message{
       Sender:  "Diary Support <theill@gmail.com>",
       ReplyTo: fmt.Sprintf("%s@commanigy-diary.appspotmail.com", token),
-      To:      []string{addr},
+      To:      []string{x.Author},
       Subject: fmt.Sprintf("It's %s - How did your day go?", today),
       Body:    fmt.Sprintf(dailyMailMessage, url),
     }
@@ -321,6 +320,35 @@ func incomingMail(w http.ResponseWriter, r *http.Request) {
 
   replyTo := msg.Header.Get("Reply-To")
   token := tokenFromEmailAddress(replyTo)
+
+  ancestorKey := datastore.NewKey(c, "Diary", "default_diary", 0, nil)
+  q := datastore.NewQuery("Diary").Ancestor(ancestorKey).Filter("Token =", token).Limit(1)
+
+  var diaryKeys []*datastore.Key
+
+  diaries := make([]Diary, 0, 1)
+  diaryKeys, err := q.GetAll(c, &diaries)
+  if err != nil {
+    http.Error(w, err.Error(), http.StatusInternalServerError)
+    return
+  }
+
+  var b2 bytes.Buffer
+  if _, err2 := b2.ReadFrom(msg.Body); err2 != nil {
+    c.Errorf("Error reading body: %v", err2)
+    return
+  }
+
+  diaries[0].Entries = append(diaries[0].Entries, DiaryEntry {
+    CreatedAt: time.Now(),
+    Content: b2.String(),
+  })
+  
+  _, err3 := datastore.Put(c, diaryKeys[0], &diaries[0])
+  if err3 != nil {
+    http.Error(w, err3.Error(), http.StatusInternalServerError)
+    return
+  }
 
   c.Infof("Received mail with reply-to: %s and token %s", replyTo, token)
 }
