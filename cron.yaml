@@ -1,0 +1,5 @@
+cron:
+- description: morning mailout
+  url: /mails/daily
+  schedule: every day 09:00
+  timezone: Australia/NSW
