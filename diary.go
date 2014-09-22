@@ -40,11 +40,11 @@ func init() {
   http.HandleFunc("/_ah/mail/", incomingMail)
 }
 
-// guestbookKey returns the key used for all guestbook entries.
-func guestbookKey(c appengine.Context) *datastore.Key {
-  // The string "default_guestbook" here could be varied to have multiple guestbooks.
-  return datastore.NewKey(c, "Guestbook", "default_guestbook", 0, nil)
-}
+// // guestbookKey returns the key used for all guestbook entries.
+// func guestbookKey(c appengine.Context) *datastore.Key {
+//   // The string "default_guestbook" here could be varied to have multiple guestbooks.
+//   return datastore.NewKey(c, "Guestbook", "default_guestbook", 0, nil)
+// }
 
 func root(w http.ResponseWriter, r *http.Request) {
   if err := guestbookTemplate.Execute(w, nil); err != nil {
@@ -261,23 +261,38 @@ func write(w http.ResponseWriter, r *http.Request) {
 func dailyMail(w http.ResponseWriter, r *http.Request) {
   c := appengine.NewContext(r)
 
-  token := "xyz" // TODO: read this token from Diary
+  dataKey := datastore.NewKey(c, "Diary", "default_diary", 0, nil)
+  q := datastore.NewQuery("Diary").Ancestor(dataKey).Order("-CreatedAt")
 
-  const layout = "Monday, Jan 2"
-  t := time.Now().UTC()
-  today := t.Format(layout)
+  for t := q.Run(c); ; {
+    var x Diary
+    _, err := t.Next(&x)
+    if err == datastore.Done {
+      break
+    }
+    if err != nil {
+      // serveError(c, w, err)
+      return
+    }
 
-  addr := "peter@theill.com"
-  url := "http://diary.commanigy.com/confirm"
-  msg := &appmail.Message{
-    Sender:  "Diary Support <theill@gmail.com>",
-    ReplyTo: fmt.Sprintf("%s@commanigy-diary.appspotmail.com", token),
-    To:      []string{addr},
-    Subject: fmt.Sprintf("It's %s - How did your day go?", today),
-    Body:    fmt.Sprintf(dailyMailMessage, url),
-  }
-  if err := appmail.Send(c, msg); err != nil {
-    c.Errorf("Couldn't send email: %v", err)
+    token := x.Token
+
+    const layout = "Monday, Jan 2"
+    t := time.Now().UTC()
+    today := t.Format(layout)
+
+    addr := "peter@theill.com"
+    url := "http://diary.commanigy.com/"
+    msg := &appmail.Message{
+      Sender:  "Diary Support <theill@gmail.com>",
+      ReplyTo: fmt.Sprintf("%s@commanigy-diary.appspotmail.com", token),
+      To:      []string{addr},
+      Subject: fmt.Sprintf("It's %s - How did your day go?", today),
+      Body:    fmt.Sprintf(dailyMailMessage, url),
+    }
+    if err := appmail.Send(c, msg); err != nil {
+      c.Errorf("Couldn't send email: %v", err)
+    }
   }
 }
 
@@ -286,8 +301,6 @@ func tokenFromEmailAddress(emailAddress string) (string) {
 }
 
 func incomingMail(w http.ResponseWriter, r *http.Request) {
-
-  // TODO: parse token from incoming mail
   // TODO: find diary matching that token
   // TODO: parse mail body and extract important part
   // TODO: add new diary entry to diary
@@ -321,4 +334,3 @@ Remember this? One year ago you wrote...
 
 Past entries | Unsubscribe
 `
-
