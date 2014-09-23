@@ -25,7 +25,7 @@ type Diary struct {
   CreatedAt   time.Time
   Author      string
   Token       string
-  Entries     []DiaryEntry
+  // Entries     []DiaryEntry
 }
 
 func init() {
@@ -59,28 +59,14 @@ var guestbookTemplate = template.Must(template.New("book").Parse(`
   </head>
   <body>
     <h1>Diary</h1>
+    <p>Welcome to Diary - an open-source OhLife replacement programmed in GO</p>
+
     <form action="/signup" method="post">
       <div><input type="submit" value="Sign up"></div>
     </form>
   </body>
 </html>
 `))
-
-func signout(w http.ResponseWriter, r *http.Request) {
-  c := appengine.NewContext(r)
-  u := user.Current(c)
-  if u != nil {
-    url, err := user.LogoutURL(c, r.URL.String())
-    if err != nil {
-      http.Error(w, err.Error(), http.StatusInternalServerError)
-      return
-    }
-    w.Header().Set("Location", url)
-    w.WriteHeader(http.StatusFound)
-    return
-  }
-  http.Redirect(w, r, "/", http.StatusFound)
-}
 
 func signup(w http.ResponseWriter, r *http.Request) {
   c := appengine.NewContext(r)
@@ -97,30 +83,22 @@ func signup(w http.ResponseWriter, r *http.Request) {
     return
   }
 
-  ancestorKey := datastore.NewKey(c, "Diary", "default_diary", 0, nil)
-  cnt, err := datastore.NewQuery("Diary").Ancestor(ancestorKey).Filter("Author =", u.Email).Count(c)
-  if err != nil {
-    http.Error(w, err.Error(), http.StatusInternalServerError)
-    return
-  }
+  ancestorKey := datastore.NewKey(c, "Diary", u.Email, 0, nil)
 
-  if (cnt == 0) {
-    entries := make([]DiaryEntry, 1)
-    entries[0] = DiaryEntry {
-      CreatedAt: time.Now(),
-      Content: "Empty",
-    }
+  var diary *Diary
+  err := datastore.Get(c, ancestorKey, diary)
+  if err != nil {
+    // new user
 
     h := md5.New()
 
     g := Diary {
-      CreatedAt: time.Now(),
+      CreatedAt: time.Now().UTC(),
       Author: u.Email,
       Token: fmt.Sprintf("%x", h.Sum(nil)),
-      Entries: entries,
     }
 
-    key := datastore.NewIncompleteKey(c, "Diary", ancestorKey)
+    key := datastore.NewKey(c, "Diary", u.Email, 0, nil)
     _, err := datastore.Put(c, key, &g)
     if err != nil {
       http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -129,6 +107,22 @@ func signup(w http.ResponseWriter, r *http.Request) {
   }
 
   http.Redirect(w, r, "/diary", http.StatusFound)
+}
+
+func signout(w http.ResponseWriter, r *http.Request) {
+  c := appengine.NewContext(r)
+  u := user.Current(c)
+  if u != nil {
+    url, err := user.LogoutURL(c, r.URL.String())
+    if err != nil {
+      http.Error(w, err.Error(), http.StatusInternalServerError)
+      return
+    }
+    w.Header().Set("Location", url)
+    w.WriteHeader(http.StatusFound)
+    return
+  }
+  http.Redirect(w, r, "/", http.StatusFound)
 }
 
 // func signin(w http.ResponseWriter, r *http.Request) {
@@ -180,9 +174,10 @@ func diary(w http.ResponseWriter, r *http.Request) {
 
   u := user.Current(c)
 
-  key := datastore.NewKey(c, "Diary", "default_diary", 0, nil)
-  q := datastore.NewQuery("Diary").Ancestor(key).Filter("Author =", u.Email).Order("-CreatedAt").Limit(10)
-  greetings := make([]Diary, 0, 10)
+  ancestorKey := datastore.NewKey(c, "Diary", u.Email, 0, nil)
+
+  q := datastore.NewQuery("DiaryEntry").Ancestor(ancestorKey).Order("-CreatedAt").Limit(10)
+  greetings := make([]DiaryEntry, 0, 10)
   if _, err := q.GetAll(c, &greetings); err != nil {
     http.Error(w, err.Error(), http.StatusInternalServerError)
     return
@@ -199,10 +194,8 @@ var diaryTemplate = template.Must(template.New("book").Parse(`
   </head>
   <body>
     {{range .}}
-      <pre>{{.CreatedAt}}</pre>
-      {{range .Entries}}
-        <p>{{ .Content }}</p>
-      {{end}}
+      <h3>{{ .CreatedAt }}</h3>
+      <pre>{{ .Content }}</pre>
     {{end}}
     <hr />
     <form action="/signout" method="post">
@@ -232,28 +225,50 @@ func write(w http.ResponseWriter, r *http.Request) {
 
   u := user.Current(c)
 
-  ancestorKey := datastore.NewKey(c, "Diary", "default_diary", 0, nil)
-  q := datastore.NewQuery("Diary").Ancestor(ancestorKey).Filter("Author =", u.Email).Limit(1)
+  ancestorKey := datastore.NewKey(c, "Diary", u.Email, 0, nil)
 
-  var diaryKeys []*datastore.Key
-
-  diaries := make([]Diary, 0, 1)
-  diaryKeys, err := q.GetAll(c, &diaries)
+  var diary Diary
+  err := datastore.Get(c, ancestorKey, &diary)
   if err != nil {
     http.Error(w, err.Error(), http.StatusInternalServerError)
     return
   }
 
-  diaries[0].Entries = append(diaries[0].Entries, DiaryEntry {
-    CreatedAt: time.Now(),
-    Content: "AnotherOne",
-  })
-  
-  _, err2 := datastore.Put(c, diaryKeys[0], &diaries[0])
-  if err2 != nil {
-    http.Error(w, err2.Error(), http.StatusInternalServerError)
+  diaryEntry := DiaryEntry {
+    CreatedAt: time.Now().UTC(),
+    Content: "Whatever",
+  }
+
+  key := datastore.NewIncompleteKey(c, "DiaryEntry", ancestorKey)
+  _, err3 := datastore.Put(c, key, &diaryEntry)
+  if err3 != nil {
+    http.Error(w, err3.Error(), http.StatusInternalServerError)
     return
   }
+
+
+  // ancestorKey := datastore.NewKey(c, "Diary", "default_diary", 0, nil)
+  // q := datastore.NewQuery("Diary").Ancestor(ancestorKey).Filter("Author =", u.Email).Limit(1)
+
+  // var diaryKeys []*datastore.Key
+
+  // diaries := make([]Diary, 0, 1)
+  // diaryKeys, err := q.GetAll(c, &diaries)
+  // if err != nil {
+  //   http.Error(w, err.Error(), http.StatusInternalServerError)
+  //   return
+  // }
+
+  // diaries[0].Entries = append(diaries[0].Entries, DiaryEntry {
+  //   CreatedAt: time.Now().UTC(),
+  //   Content: "AnotherOne",
+  // })
+  
+  // _, err2 := datastore.Put(c, diaryKeys[0], &diaries[0])
+  // if err2 != nil {
+  //   http.Error(w, err2.Error(), http.StatusInternalServerError)
+  //   return
+  // }
 
   http.Redirect(w, r, "/diary", http.StatusFound)
 }
@@ -300,9 +315,8 @@ func tokenFromEmailAddress(emailAddress string) (string) {
 }
 
 func incomingMail(w http.ResponseWriter, r *http.Request) {
-  // TODO: find diary matching that token
   // TODO: parse mail body and extract important part
-  // TODO: add new diary entry to diary
+  // TODO: discard messages which are too big
 
   c := appengine.NewContext(r)
   defer r.Body.Close()
@@ -314,49 +328,55 @@ func incomingMail(w http.ResponseWriter, r *http.Request) {
   
   msg, err2 := mail.ReadMessage(bytes.NewReader(b.Bytes()))
   if err2 != nil {
-    // http.Error(w, err2.Error(), http.StatusInternalServerError)
+    c.Errorf("Couldn't read email: %v", err2.Error())
     return
   }
 
-  replyTo := msg.Header.Get("Reply-To")
-  token := tokenFromEmailAddress(replyTo)
+  token := tokenFromEmailAddress(msg.Header.Get("To"))
+  c.Infof("Received mail with token %s", token)
 
-  ancestorKey := datastore.NewKey(c, "Diary", "default_diary", 0, nil)
-  q := datastore.NewQuery("Diary").Ancestor(ancestorKey).Filter("Token =", token).Limit(1)
+  q := datastore.NewQuery("Diary").Filter("Token =", token).KeysOnly()
 
-  var diaryKeys []*datastore.Key
-
-  diaries := make([]Diary, 0, 1)
-  diaryKeys, err := q.GetAll(c, &diaries)
+  diaryKeys, err := q.GetAll(c, nil)
   if err != nil {
     http.Error(w, err.Error(), http.StatusInternalServerError)
     return
   }
 
-  var b2 bytes.Buffer
-  if _, err2 := b2.ReadFrom(msg.Body); err2 != nil {
+  var bodyBuffer bytes.Buffer
+  if _, err2 := bodyBuffer.ReadFrom(msg.Body); err2 != nil {
     c.Errorf("Error reading body: %v", err2)
     return
   }
 
-  diaries[0].Entries = append(diaries[0].Entries, DiaryEntry {
-    CreatedAt: time.Now(),
-    Content: b2.String(),
-  })
-  
-  _, err3 := datastore.Put(c, diaryKeys[0], &diaries[0])
+  diaryEntry := DiaryEntry {
+    CreatedAt: time.Now().UTC(),
+    Content: bodyBuffer.String(),
+  }
+
+  key := datastore.NewIncompleteKey(c, "DiaryEntry", diaryKeys[0])
+  _, err3 := datastore.Put(c, key, &diaryEntry)
   if err3 != nil {
     http.Error(w, err3.Error(), http.StatusInternalServerError)
     return
   }
 
-  c.Infof("Received mail with reply-to: %s and token %s", replyTo, token)
+  // diaries[0].Entries = append(diaries[0].Entries, DiaryEntry {
+  //   CreatedAt: time.Now().UTC(),
+  //   Content: bodyBuffer.String(),
+  // })
+  
+  // _, err3 := datastore.Put(c, diaryKeys[0], &diaries[0])
+  // if err3 != nil {
+  //   http.Error(w, err3.Error(), http.StatusInternalServerError)
+  //   return
+  // }
 }
 
 const dailyMailMessage = `
 Just reply to this email with your entry.
 
-Remember this? One year ago you wrote...
+(include this one if possible) Remember this? One year ago you wrote...
 
 %s
 
