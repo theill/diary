@@ -276,9 +276,8 @@ func write(w http.ResponseWriter, r *http.Request) {
 func dailyMail(w http.ResponseWriter, r *http.Request) {
   c := appengine.NewContext(r)
 
-  dataKey := datastore.NewKey(c, "Diary", "default_diary", 0, nil)
-  q := datastore.NewQuery("Diary").Ancestor(dataKey).Order("-CreatedAt")
-
+  q := datastore.NewQuery("Diary").Order("-CreatedAt")
+  
   for t := q.Run(c); ; {
     var x Diary
     _, err := t.Next(&x)
@@ -307,6 +306,8 @@ func dailyMail(w http.ResponseWriter, r *http.Request) {
     if err := appmail.Send(c, msg); err != nil {
       c.Errorf("Couldn't send email: %v", err)
     }
+
+    c.Infof("Daily mail send to %s", x.Author)
   }
 }
 
@@ -322,30 +323,30 @@ func incomingMail(w http.ResponseWriter, r *http.Request) {
   defer r.Body.Close()
   var b bytes.Buffer
   if _, err := b.ReadFrom(r.Body); err != nil {
-    c.Errorf("Error reading body: %v", err)
+    http.Error(w, err.Error(), http.StatusInternalServerError)
     return
   }
   
   msg, err2 := mail.ReadMessage(bytes.NewReader(b.Bytes()))
   if err2 != nil {
-    c.Errorf("Couldn't read email: %v", err2.Error())
-    return
-  }
-
-  token := tokenFromEmailAddress(msg.Header.Get("To"))
-  c.Infof("Received mail with token %s", token)
-
-  q := datastore.NewQuery("Diary").Filter("Token =", token).KeysOnly()
-
-  diaryKeys, err := q.GetAll(c, nil)
-  if err != nil {
-    http.Error(w, err.Error(), http.StatusInternalServerError)
+    http.Error(w, err2.Error(), http.StatusInternalServerError)
     return
   }
 
   var bodyBuffer bytes.Buffer
-  if _, err2 := bodyBuffer.ReadFrom(msg.Body); err2 != nil {
-    c.Errorf("Error reading body: %v", err2)
+  if _, err4 := bodyBuffer.ReadFrom(msg.Body); err4 != nil {
+    http.Error(w, err4.Error(), http.StatusInternalServerError)
+    return
+  }
+
+  token := tokenFromEmailAddress(msg.Header.Get("To"))
+  c.Infof("Received mail with token %s", token)  
+
+  q := datastore.NewQuery("Diary").Filter("Token =", token).KeysOnly()
+
+  diaryKeys, err3 := q.GetAll(c, nil)
+  if err3 != nil {
+    http.Error(w, err3.Error(), http.StatusInternalServerError)
     return
   }
 
@@ -354,23 +355,14 @@ func incomingMail(w http.ResponseWriter, r *http.Request) {
     Content: bodyBuffer.String(),
   }
 
-  key := datastore.NewIncompleteKey(c, "DiaryEntry", diaryKeys[0])
-  _, err3 := datastore.Put(c, key, &diaryEntry)
-  if err3 != nil {
-    http.Error(w, err3.Error(), http.StatusInternalServerError)
+  diaryEntryKey := datastore.NewIncompleteKey(c, "DiaryEntry", diaryKeys[0])
+  _, err5 := datastore.Put(c, diaryEntryKey, &diaryEntry)
+  if err5 != nil {
+    http.Error(w, err5.Error(), http.StatusInternalServerError)
     return
   }
 
-  // diaries[0].Entries = append(diaries[0].Entries, DiaryEntry {
-  //   CreatedAt: time.Now().UTC(),
-  //   Content: bodyBuffer.String(),
-  // })
-  
-  // _, err3 := datastore.Put(c, diaryKeys[0], &diaries[0])
-  // if err3 != nil {
-  //   http.Error(w, err3.Error(), http.StatusInternalServerError)
-  //   return
-  // }
+  c.Infof("Added new diary entry for key %s", diaryEntryKey)  
 }
 
 const dailyMailMessage = `
