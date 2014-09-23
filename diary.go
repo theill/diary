@@ -18,21 +18,20 @@ import (
 
 type DiaryEntry struct {
   CreatedAt   time.Time
-  Content     string
+  Content     string      `datastore:",noindex"`
 }
 
 type Diary struct {
   CreatedAt   time.Time
   Author      string
   Token       string
-  // Entries     []DiaryEntry
 }
+
+const REPLY_TO_ADDRESS string = "%s@commanigy-diary.appspotmail.com"
 
 func init() {
   http.HandleFunc("/", root)
-  // http.HandleFunc("/sign", sign)
   http.HandleFunc("/signup", signup)
-  // http.HandleFunc("/signin", signin)
   http.HandleFunc("/signout", signout)
   http.HandleFunc("/write", write)
   http.HandleFunc("/diary", diary)
@@ -40,33 +39,15 @@ func init() {
   http.HandleFunc("/_ah/mail/", incomingMail)
 }
 
-// // guestbookKey returns the key used for all guestbook entries.
-// func guestbookKey(c appengine.Context) *datastore.Key {
-//   // The string "default_guestbook" here could be varied to have multiple guestbooks.
-//   return datastore.NewKey(c, "Guestbook", "default_guestbook", 0, nil)
-// }
-
 func root(w http.ResponseWriter, r *http.Request) {
-  if err := guestbookTemplate.Execute(w, nil); err != nil {
+  t, err := template.ParseFiles("templates/index.html")
+  if err != nil {
     http.Error(w, err.Error(), http.StatusInternalServerError)
+    return
   }
+
+  t.Execute(w, nil)
 }
-
-var guestbookTemplate = template.Must(template.New("book").Parse(`
-<html>
-  <head>
-    <title>Diary</title>
-  </head>
-  <body>
-    <h1>Diary</h1>
-    <p>Welcome to Diary - an open-source OhLife replacement programmed in GO</p>
-
-    <form action="/signup" method="post">
-      <div><input type="submit" value="Sign up"></div>
-    </form>
-  </body>
-</html>
-`))
 
 func signup(w http.ResponseWriter, r *http.Request) {
   c := appengine.NewContext(r)
@@ -90,12 +71,10 @@ func signup(w http.ResponseWriter, r *http.Request) {
   if err != nil {
     // new user
 
-    h := md5.New()
-
     g := Diary {
       CreatedAt: time.Now().UTC(),
       Author: u.Email,
-      Token: fmt.Sprintf("%x", h.Sum(nil)),
+      Token: fmt.Sprintf("%x", md5.New().Sum(nil)),
     }
 
     key := datastore.NewKey(c, "Diary", u.Email, 0, nil)
@@ -111,6 +90,7 @@ func signup(w http.ResponseWriter, r *http.Request) {
 
 func signout(w http.ResponseWriter, r *http.Request) {
   c := appengine.NewContext(r)
+
   u := user.Current(c)
   if u != nil {
     url, err := user.LogoutURL(c, r.URL.String())
@@ -122,52 +102,9 @@ func signout(w http.ResponseWriter, r *http.Request) {
     w.WriteHeader(http.StatusFound)
     return
   }
+
   http.Redirect(w, r, "/", http.StatusFound)
 }
-
-// func signin(w http.ResponseWriter, r *http.Request) {
-//   c := appengine.NewContext(r)
-//   g := Greeting {
-//     Content: r.FormValue("content"),
-//     Date:    time.Now(),
-//   }
-//   if u := user.Current(c); u != nil {
-//     g.Author = u.String()
-//   }
-//   // We set the same parent key on every Greeting entity to ensure each Greeting
-//   // is in the same entity group. Queries across the single entity group
-//   // will be consistent. However, the write rate to a single entity group
-//   // should be limited to ~1/second.
-//   key := datastore.NewIncompleteKey(c, "Greeting", guestbookKey(c))
-//   _, err := datastore.Put(c, key, &g)
-//   if err != nil {
-//     http.Error(w, err.Error(), http.StatusInternalServerError)
-//     return
-//   }
-//   http.Redirect(w, r, "/", http.StatusFound)
-// }
-
-// func sign(w http.ResponseWriter, r *http.Request) {
-//   c := appengine.NewContext(r)
-//   g := Greeting{
-//     Content: r.FormValue("content"),
-//     Date:    time.Now(),
-//   }
-//   if u := user.Current(c); u != nil {
-//     g.Author = u.String()
-//   }
-//   // We set the same parent key on every Greeting entity to ensure each Greeting
-//   // is in the same entity group. Queries across the single entity group
-//   // will be consistent. However, the write rate to a single entity group
-//   // should be limited to ~1/second.
-//   key := datastore.NewIncompleteKey(c, "Greeting", guestbookKey(c))
-//   _, err := datastore.Put(c, key, &g)
-//   if err != nil {
-//     http.Error(w, err.Error(), http.StatusInternalServerError)
-//     return
-//   }
-//   http.Redirect(w, r, "/", http.StatusFound)
-// }
 
 func diary(w http.ResponseWriter, r *http.Request) {
   c := appengine.NewContext(r)
@@ -176,50 +113,39 @@ func diary(w http.ResponseWriter, r *http.Request) {
 
   ancestorKey := datastore.NewKey(c, "Diary", u.Email, 0, nil)
 
-  q := datastore.NewQuery("DiaryEntry").Ancestor(ancestorKey).Order("-CreatedAt").Limit(10)
-  greetings := make([]DiaryEntry, 0, 10)
-  if _, err := q.GetAll(c, &greetings); err != nil {
+  var diary Diary
+  if err := datastore.Get(c, ancestorKey, &diary); err != nil {
     http.Error(w, err.Error(), http.StatusInternalServerError)
     return
   }
-  if err := diaryTemplate.Execute(w, greetings); err != nil {
+
+  q := datastore.NewQuery("DiaryEntry").Ancestor(ancestorKey).Order("-CreatedAt").Limit(5)
+  entries := make([]DiaryEntry, 0, 5)
+  if _, err := q.GetAll(c, &entries); err != nil {
     http.Error(w, err.Error(), http.StatusInternalServerError)
+    return
   }
+
+  data := struct {
+    Diary Diary
+    DiaryEntries []DiaryEntry
+    EmailAddress string
+  } {
+    diary,
+    entries,
+    fmt.Sprintf(REPLY_TO_ADDRESS, diary.Token),
+  }
+
+  t, err := template.ParseFiles("templates/diaries/index.html")
+  if err != nil {
+    http.Error(w, err.Error(), http.StatusInternalServerError)
+    return
+  }
+
+  t.Execute(w, data)  
 }
 
-var diaryTemplate = template.Must(template.New("book").Parse(`
-<html>
-  <head>
-    <title>Diary</title>
-  </head>
-  <body>
-    {{range .}}
-      <h3>{{ .CreatedAt }}</h3>
-      <pre>{{ .Content }}</pre>
-    {{end}}
-    <hr />
-    <form action="/signout" method="post">
-      <div><input type="submit" value="Sign out"></div>
-    </form>
-  </body>
-</html>
-`))
-
-// func findDiaryByToken(c appengine.Context, token string) (*Diary, error) {
-//   ancestorKey := datastore.NewKey(c, "Diary", "default_diary", 0, nil)
-//   q := datastore.NewQuery("Diary").Ancestor(ancestorKey).Filter("Token =", token).Limit(1)
-
-//   var diaryKeys []*datastore.Key
-
-//   diaries := make([]Diary, 0, 1)
-//   diaryKeys, err := q.GetAll(c, &diaries)
-//   if err != nil {
-//     return nil, err
-//   }
-
-//   return &diaries[0], nil
-// }
-
+// for testing purposes
 func write(w http.ResponseWriter, r *http.Request) {
   c := appengine.NewContext(r)
 
@@ -246,60 +172,34 @@ func write(w http.ResponseWriter, r *http.Request) {
     return
   }
 
-
-  // ancestorKey := datastore.NewKey(c, "Diary", "default_diary", 0, nil)
-  // q := datastore.NewQuery("Diary").Ancestor(ancestorKey).Filter("Author =", u.Email).Limit(1)
-
-  // var diaryKeys []*datastore.Key
-
-  // diaries := make([]Diary, 0, 1)
-  // diaryKeys, err := q.GetAll(c, &diaries)
-  // if err != nil {
-  //   http.Error(w, err.Error(), http.StatusInternalServerError)
-  //   return
-  // }
-
-  // diaries[0].Entries = append(diaries[0].Entries, DiaryEntry {
-  //   CreatedAt: time.Now().UTC(),
-  //   Content: "AnotherOne",
-  // })
-  
-  // _, err2 := datastore.Put(c, diaryKeys[0], &diaries[0])
-  // if err2 != nil {
-  //   http.Error(w, err2.Error(), http.StatusInternalServerError)
-  //   return
-  // }
-
   http.Redirect(w, r, "/diary", http.StatusFound)
 }
 
 func dailyMail(w http.ResponseWriter, r *http.Request) {
   c := appengine.NewContext(r)
 
-  q := datastore.NewQuery("Diary").Order("-CreatedAt")
-  
-  for t := q.Run(c); ; {
-    var x Diary
-    _, err := t.Next(&x)
+  query := datastore.NewQuery("Diary").Order("-CreatedAt")
+  for t := query.Run(c); ; {
+    var diary Diary
+    _, err := t.Next(&diary)
     if err == datastore.Done {
       break
     }
     if err != nil {
-      // serveError(c, w, err)
-      return
+      c.Errorf("Failed to populate diary: %v", err)
+      continue
     }
 
-    token := x.Token
+    token := diary.Token
 
     const layout = "Monday, Jan 2"
-    t := time.Now().UTC()
-    today := t.Format(layout)
+    today := time.Now().UTC().Format(layout)
 
     url := "http://diary.commanigy.com/"
     msg := &appmail.Message{
       Sender:  "Diary Support <theill@gmail.com>",
-      ReplyTo: fmt.Sprintf("%s@commanigy-diary.appspotmail.com", token),
-      To:      []string{x.Author},
+      ReplyTo: fmt.Sprintf(REPLY_TO_ADDRESS, token),
+      To:      []string{diary.Author},
       Subject: fmt.Sprintf("It's %s - How did your day go?", today),
       Body:    fmt.Sprintf(dailyMailMessage, url),
     }
@@ -307,7 +207,7 @@ func dailyMail(w http.ResponseWriter, r *http.Request) {
       c.Errorf("Couldn't send email: %v", err)
     }
 
-    c.Infof("Daily mail send to %s", x.Author)
+    c.Infof("Daily mail send to %s", diary.Author)
   }
 }
 
@@ -320,21 +220,25 @@ func incomingMail(w http.ResponseWriter, r *http.Request) {
   // TODO: discard messages which are too big
 
   c := appengine.NewContext(r)
+
   defer r.Body.Close()
   var b bytes.Buffer
   if _, err := b.ReadFrom(r.Body); err != nil {
+    c.Errorf("Failed to read stream body: %s", err)
     http.Error(w, err.Error(), http.StatusInternalServerError)
     return
   }
   
   msg, err2 := mail.ReadMessage(bytes.NewReader(b.Bytes()))
   if err2 != nil {
+    c.Errorf("Failed to read message: %s", err2)
     http.Error(w, err2.Error(), http.StatusInternalServerError)
     return
   }
 
   var bodyBuffer bytes.Buffer
   if _, err4 := bodyBuffer.ReadFrom(msg.Body); err4 != nil {
+    c.Errorf("Failed to read body: %s", err4)
     http.Error(w, err4.Error(), http.StatusInternalServerError)
     return
   }
@@ -346,6 +250,7 @@ func incomingMail(w http.ResponseWriter, r *http.Request) {
 
   diaryKeys, err3 := q.GetAll(c, nil)
   if err3 != nil {
+    c.Errorf("Failed to read diary: %s", err3)
     http.Error(w, err3.Error(), http.StatusInternalServerError)
     return
   }
@@ -358,6 +263,7 @@ func incomingMail(w http.ResponseWriter, r *http.Request) {
   diaryEntryKey := datastore.NewIncompleteKey(c, "DiaryEntry", diaryKeys[0])
   _, err5 := datastore.Put(c, diaryEntryKey, &diaryEntry)
   if err5 != nil {
+    c.Errorf("Failed to insert diary entry %s", err5)
     http.Error(w, err5.Error(), http.StatusInternalServerError)
     return
   }
@@ -372,5 +278,5 @@ Just reply to this email with your entry.
 
 %s
 
-Past entries | Unsubscribe
+<a href="/latest">Past entries</a> | <a href="/settings/emailfrequency">Unsubscribe</a>
 `

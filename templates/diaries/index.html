@@ -1,0 +1,19 @@
+<html>
+  <head>
+    <title>Diary</title>
+  </head>
+  <body>
+    <h1>Hi {{ .Diary.Author }}</h1>
+    <p>
+      Your personal email address is <code>{{ .EmailAddress }}</code> and should be used to add entries to your diary.
+    </p>
+    {{range .DiaryEntries }}
+      <h3>{{ .CreatedAt }}</h3>
+      <pre>{{ .Content }}</pre>
+    {{end}}
+    <hr />
+    <form action="/signout" method="post">
+      <div><input type="submit" value="Sign out"></div>
+    </form>
+  </body>
+</html>

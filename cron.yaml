@@ -1,4 +1,4 @@
 cron:
 - description: morning mailout
   url: /mails/daily
-  schedule: every day 21:00
+  schedule: every day 20:00
