@@ -243,15 +243,36 @@ func incomingMail(w http.ResponseWriter, r *http.Request) {
     return
   }
 
-  token := tokenFromEmailAddress(msg.Header.Get("To"))
-  c.Infof("Received mail with token %s", token)  
+  addresses, err := msg.Header.AddressList("To")
+  if err != nil {
+    c.Errorf("Failed to parse addresses: %s", err)
+    return
+  }
 
-  q := datastore.NewQuery("Diary").Filter("Token =", token).KeysOnly()
+  var diaryEntryKey *datastore.Key
 
-  diaryKeys, err3 := q.GetAll(c, nil)
-  if err3 != nil {
-    c.Errorf("Failed to read diary: %s", err3)
-    http.Error(w, err3.Error(), http.StatusInternalServerError)
+  for _, address := range addresses {
+    token := tokenFromEmailAddress(address.Address)
+    c.Infof("Received mail with token %s", token)
+
+    q := datastore.NewQuery("Diary").Filter("Token =", token).KeysOnly()
+
+    diaryKeys, err3 := q.GetAll(c, nil)
+    if err3 != nil {
+      c.Errorf("Failed to read diary: %s", err3)
+      http.Error(w, err3.Error(), http.StatusInternalServerError)
+      continue
+    }
+
+    if len(diaryKeys) == 0 {
+      continue
+    }
+
+    diaryEntryKey = datastore.NewIncompleteKey(c, "DiaryEntry", diaryKeys[0])
+  }
+
+  if diaryEntryKey == nil {
+    c.Errorf("No diary found")
     return
   }
 
@@ -260,7 +281,6 @@ func incomingMail(w http.ResponseWriter, r *http.Request) {
     Content: bodyBuffer.String(),
   }
 
-  diaryEntryKey := datastore.NewIncompleteKey(c, "DiaryEntry", diaryKeys[0])
   _, err5 := datastore.Put(c, diaryEntryKey, &diaryEntry)
   if err5 != nil {
     c.Errorf("Failed to insert diary entry %s", err5)
