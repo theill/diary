@@ -10,10 +10,19 @@ import (
   "strings"
   "crypto/md5"
 
+  "io"
+  "io/ioutil"
+  "mime"
+  // "log"
+  "mime/multipart"
+
+  
   "appengine"
+  // "appengine/urlfetch"
   "appengine/datastore"
   "appengine/user"
   appmail "appengine/mail"
+  // "github.com/sendgrid/sendgrid-go"
 )
 
 type DiaryEntry struct {
@@ -178,6 +187,11 @@ func write(w http.ResponseWriter, r *http.Request) {
 func dailyMail(w http.ResponseWriter, r *http.Request) {
   c := appengine.NewContext(r)
 
+  // sg := sendgrid.NewSendGridClient("sendgrid_user", "sendgrid_key")
+
+  // // set http.Client to use the appengine client
+  // sg.Client = urlfetch.Client(c) //Just perform this swap, and you are good to go.
+
   query := datastore.NewQuery("Diary").Order("-CreatedAt")
   for t := query.Run(c); ; {
     var diary Diary
@@ -195,17 +209,27 @@ func dailyMail(w http.ResponseWriter, r *http.Request) {
     const layout = "Monday, Jan 2"
     today := time.Now().UTC().Format(layout)
 
-    url := "http://diary.commanigy.com/"
+    // url := "http://diary.commanigy.com/"
     msg := &appmail.Message{
-      Sender:  "Diary Support <theill@gmail.com>",
-      ReplyTo: fmt.Sprintf(REPLY_TO_ADDRESS, token),
-      To:      []string{diary.Author},
-      Subject: fmt.Sprintf("It's %s - How did your day go?", today),
-      Body:    fmt.Sprintf(dailyMailMessage, url),
+      Sender:   "Diary Support <" + fmt.Sprintf(REPLY_TO_ADDRESS, token) + ">",
+      To:       []string{diary.Author},
+      Subject:  fmt.Sprintf("It's %s - How did your day go?", today),
+      Body:     fmt.Sprintf(dailyMailMessage, token),
+      HTMLBody: fmt.Sprintf(dailyHtmlMailMessage, token),
     }
     if err := appmail.Send(c, msg); err != nil {
       c.Errorf("Couldn't send email: %v", err)
     }
+
+    // message := sendgrid.NewMail()
+    // message.AddTo(diary.Author)
+    // message.SetSubject(fmt.Sprintf("It's %s - How did your day go?", today))
+    // message.SetHTML(fmt.Sprintf(dailyMailMessage, url))
+    // message.SetFrom("Diary Support <theill@gmail.com>")
+    // message.SetReplyTo(fmt.Sprintf(REPLY_TO_ADDRESS, token))
+    // if err := sg.Send(message); err != nil {
+    //   c.Errorf("Couldn't send email: %v", err)
+    // }
 
     c.Infof("Daily mail send to %s", diary.Author)
   }
@@ -218,6 +242,7 @@ func tokenFromEmailAddress(emailAddress string) (string) {
 func incomingMail(w http.ResponseWriter, r *http.Request) {
   // TODO: parse mail body and extract important part
   // TODO: discard messages which are too big
+  // TODO: include "remember, one (week|month|year) ago you wrote" in mails
 
   c := appengine.NewContext(r)
 
@@ -276,9 +301,14 @@ func incomingMail(w http.ResponseWriter, r *http.Request) {
     return
   }
 
+  content := parseMailBody(c, msg)
+
+  c.Infof("content => %s", content)
+
   diaryEntry := DiaryEntry {
     CreatedAt: time.Now().UTC(),
-    Content: bodyBuffer.String(),
+    Content: content,
+    // Content: bodyBuffer.String(),
   }
 
   _, err5 := datastore.Put(c, diaryEntryKey, &diaryEntry)
@@ -291,12 +321,50 @@ func incomingMail(w http.ResponseWriter, r *http.Request) {
   c.Infof("Added new diary entry for key %s", diaryEntryKey)  
 }
 
+func parseMailBody(c appengine.Context, msg *mail.Message) string {
+  mediaType, params, err := mime.ParseMediaType(msg.Header.Get("Content-Type"))
+  if err != nil {
+    c.Errorf("Failed to parse content type %s", err)
+    return "1: " + err.Error()
+  }
+  c.Infof("mediaType %s", mediaType)
+  if strings.HasPrefix(mediaType, "multipart/") {
+    c.Infof("boundary %s", params["boundary"])
+    mr := multipart.NewReader(msg.Body, params["boundary"])
+    for {
+      p, err := mr.NextPart()
+      if err == io.EOF {
+        c.Errorf("EOF %s", err)
+        return "eof"
+      }
+      if err != nil {
+        c.Errorf("Not EOF but something else %s", p)
+        return "2: " + err.Error()
+      }
+      slurp, err := ioutil.ReadAll(p)
+      if err != nil {
+        c.Errorf("Reading all for slurp %s", err)
+        return "3: " + err.Error()
+      }
+      return fmt.Sprintf("Part %q: %q\n", p.Header.Get("Foo"), slurp)
+    }
+  }
+
+  return "ok"
+}
+
 const dailyMailMessage = `
 Just reply to this email with your entry.
 
-(include this one if possible) Remember this? One year ago you wrote...
+You can see your past entries here:
+https://commanigy-diary.appspot.com/latest
 
-%s
+You can unsubscribe from these emails here:
+https://commanigy-diary.appspot.com/settings/emailfrequency?token=%s
+`
 
-<a href="/latest">Past entries</a> | <a href="/settings/emailfrequency">Unsubscribe</a>
+const dailyHtmlMailMessage = `
+Just reply to this email with your entry.<br>
+<br>
+<a href="https://commanigy-diary.appspot.com/latest">Past entries</a> | <a href="https://commanigy-diary.appspot.com/settings/emailfrequency?token=%s">Unsubscribe</a>
 `
