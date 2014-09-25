@@ -1,0 +1,24 @@
+<div itemscope itemtype="http://schema.org/EmailMessage">
+  <div itemprop="action" itemscope itemtype="http://schema.org/ReviewAction">
+    <div itemprop="review" itemscope itemtype="http://schema.org/Review">
+      <div itemprop="itemReviewed" itemscope itemtype="http://schema.org/FoodEstablishment">
+        <meta itemprop="name" content="Joe's Diner"/>
+      </div>
+      <div itemprop="reviewRating" itemscope itemtype="http://schema.org/Rating">
+        <meta itemprop="bestRating" content="5"/>
+        <meta itemprop="worstRating" content="1"/>
+      </div>
+    </div>
+    <div itemprop="handler" itemscope itemtype="http://schema.org/HttpActionHandler">
+      <link itemprop="url" href="http://reviews.com/review?id=123"/>
+      <div itemprop="requiredProperty" itemscope itemtype="http://schema.org/Property">
+        <meta itemprop="name" content="review.reviewRating.ratingValue"/>
+      </div>
+      <div itemprop="optionalProperty" itemscope itemtype="http://schema.org/Property">
+        <meta itemprop="name" content="review.reviewBody"/>
+      </div>
+      <link itemprop="method" href="http://schema.org/HttpRequestMethod/POST"/>
+    </div>
+  </div>
+  <meta itemprop="description" content="We hope you enjoyed your meal at Joe's Diner. Please tell us about it."/>
+</div>

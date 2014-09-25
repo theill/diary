@@ -18,12 +18,17 @@ import (
 
   
   "appengine"
-  // "appengine/urlfetch"
+  "appengine/urlfetch"
   "appengine/datastore"
   "appengine/user"
   appmail "appengine/mail"
-  // "github.com/sendgrid/sendgrid-go"
+  "github.com/sendgrid/sendgrid-go"
 )
+
+type AppConfiguration struct {
+  SendGridUser  string
+  SendGridKey   string
+}
 
 type DiaryEntry struct {
   CreatedAt   time.Time
@@ -44,8 +49,30 @@ func init() {
   http.HandleFunc("/signout", signout)
   http.HandleFunc("/write", write)
   http.HandleFunc("/diary", diary)
+  http.HandleFunc("/setup", setup)
   http.HandleFunc("/mails/daily", dailyMail)
   http.HandleFunc("/_ah/mail/", incomingMail)
+}
+
+func setup(w http.ResponseWriter, r *http.Request) {
+  c := appengine.NewContext(r)
+
+  configurationKey := datastore.NewKey(c, "AppConfiguration", "global", 0, nil)
+
+  var configuration AppConfiguration
+  err := datastore.Get(c, configurationKey, &configuration)
+  if err != nil {
+    appConfiguration := AppConfiguration {
+      SendGridUser: "set-this-value",
+      SendGridKey: "set-this-value",
+    }
+
+    _, err := datastore.Put(c, configurationKey, &appConfiguration)
+    if err != nil {
+      c.Errorf("Setup failed: %v", err)
+      return
+    }
+  }
 }
 
 func root(w http.ResponseWriter, r *http.Request) {
@@ -187,10 +214,18 @@ func write(w http.ResponseWriter, r *http.Request) {
 func dailyMail(w http.ResponseWriter, r *http.Request) {
   c := appengine.NewContext(r)
 
-  // sg := sendgrid.NewSendGridClient("sendgrid_user", "sendgrid_key")
+  configurationKey := datastore.NewKey(c, "AppConfiguration", "global", 0, nil)
+
+  var appConfiguration AppConfiguration
+  if err := datastore.Get(c, configurationKey, &appConfiguration); err != nil {
+    c.Errorf("Failed to read configuration: %v", err)
+    return
+  }
+
+  sg := sendgrid.NewSendGridClient(appConfiguration.SendGridUser, appConfiguration.SendGridKey)
 
   // // set http.Client to use the appengine client
-  // sg.Client = urlfetch.Client(c) //Just perform this swap, and you are good to go.
+  sg.Client = urlfetch.Client(c) //Just perform this swap, and you are good to go.
 
   query := datastore.NewQuery("Diary").Order("-CreatedAt")
   for t := query.Run(c); ; {
@@ -209,7 +244,6 @@ func dailyMail(w http.ResponseWriter, r *http.Request) {
     const layout = "Monday, Jan 2"
     today := time.Now().UTC().Format(layout)
 
-    // url := "http://diary.commanigy.com/"
     msg := &appmail.Message{
       Sender:   "Diary Support <" + fmt.Sprintf(REPLY_TO_ADDRESS, token) + ">",
       To:       []string{diary.Author},
@@ -221,15 +255,14 @@ func dailyMail(w http.ResponseWriter, r *http.Request) {
       c.Errorf("Couldn't send email: %v", err)
     }
 
-    // message := sendgrid.NewMail()
-    // message.AddTo(diary.Author)
-    // message.SetSubject(fmt.Sprintf("It's %s - How did your day go?", today))
-    // message.SetHTML(fmt.Sprintf(dailyMailMessage, url))
-    // message.SetFrom("Diary Support <theill@gmail.com>")
-    // message.SetReplyTo(fmt.Sprintf(REPLY_TO_ADDRESS, token))
-    // if err := sg.Send(message); err != nil {
-    //   c.Errorf("Couldn't send email: %v", err)
-    // }
+    message := sendgrid.NewMail()
+    message.AddTo(diary.Author)
+    message.SetSubject(fmt.Sprintf("It's %s - How did your day go?", today))
+    message.SetHTML(fmt.Sprintf(dailyHtmlMailMessage, token))
+    message.SetFrom("Diary <" + fmt.Sprintf(REPLY_TO_ADDRESS, token) + ">")
+    if err := sg.Send(message); err != nil {
+      c.Errorf("Couldn't send email: %v", err)
+    }
 
     c.Infof("Daily mail send to %s", diary.Author)
   }
@@ -307,8 +340,8 @@ func incomingMail(w http.ResponseWriter, r *http.Request) {
 
   diaryEntry := DiaryEntry {
     CreatedAt: time.Now().UTC(),
-    Content: content,
-    // Content: bodyBuffer.String(),
+    // Content: content,
+    Content: bodyBuffer.String(),
   }
 
   _, err5 := datastore.Put(c, diaryEntryKey, &diaryEntry)
@@ -346,7 +379,7 @@ func parseMailBody(c appengine.Context, msg *mail.Message) string {
         c.Errorf("Reading all for slurp %s", err)
         return "3: " + err.Error()
       }
-      return fmt.Sprintf("Part %q: %q\n", p.Header.Get("Foo"), slurp)
+      return fmt.Sprintf("Part %q: %q\n", p.Header.Get("Content-Type"), slurp)
     }
   }
 
@@ -363,8 +396,51 @@ You can unsubscribe from these emails here:
 https://commanigy-diary.appspot.com/settings/emailfrequency?token=%s
 `
 
+// see https://developers.google.com/gmail/actions/reference/review-action
 const dailyHtmlMailMessage = `
-Just reply to this email with your entry.<br>
+<html>
+  <head>
+    <title>How did your day go?</title>
+<script type="application/ld+json">
+{
+  "@context": "http://schema.org",
+  "@type": "EmailMessage",
+  "action": {
+    "@type": "ReviewAction",
+    "review": {
+      "@type": "Review",
+      "itemReviewed": {
+        "@type": "FoodEstablishment",
+        "name": "How did your day go?"
+      },
+      "reviewRating": {
+        "@type": "Rating",
+        "bestRating": "5",
+        "worstRating": "1"
+      }
+    },
+    "handler": {
+      "@type": "HttpActionHandler",
+      "url": "http://reviews.com/review?id=123",
+      "optionalProperty": {
+        "@type": "Property",
+        "name": "review.reviewRating.ratingValue"
+      },
+      "requiredProperty": {
+        "@type": "Property",
+        "name": "review.reviewBody"
+      },
+      "method": "http://schema.org/HttpRequestMethod/POST"
+    }
+  },
+  "description": "We hope you enjoyed your meal at Joe's Diner. Please tell us about it."
+}
+</script>    
+  </head>
+  <body>
+    Just reply to this email with your entry.<br>
 <br>
 <a href="https://commanigy-diary.appspot.com/latest">Past entries</a> | <a href="https://commanigy-diary.appspot.com/settings/emailfrequency?token=%s">Unsubscribe</a>
+ </body>
+</html>
 `
