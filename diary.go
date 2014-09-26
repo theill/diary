@@ -255,14 +255,14 @@ func dailyMail(w http.ResponseWriter, r *http.Request) {
       c.Errorf("Couldn't send email: %v", err)
     }
 
-    message := sendgrid.NewMail()
-    message.AddTo(diary.Author)
-    message.SetSubject(fmt.Sprintf("It's %s - How did your day go?", today))
-    message.SetHTML(fmt.Sprintf(dailyHtmlMailMessage, token))
-    message.SetFrom("Diary <" + fmt.Sprintf(REPLY_TO_ADDRESS, token) + ">")
-    if err := sg.Send(message); err != nil {
-      c.Errorf("Couldn't send email: %v", err)
-    }
+    // message := sendgrid.NewMail()
+    // message.AddTo(diary.Author)
+    // message.SetSubject(fmt.Sprintf("It's %s - How did your day go?", today))
+    // message.SetHTML(fmt.Sprintf(dailyHtmlMailMessage, token))
+    // message.SetFrom("Diary <" + fmt.Sprintf(REPLY_TO_ADDRESS, token) + ">")
+    // if err := sg.Send(message); err != nil {
+    //   c.Errorf("Couldn't send email: %v", err)
+    // }
 
     c.Infof("Daily mail send to %s", diary.Author)
   }
