@@ -14,47 +14,32 @@
 
           <div class="masthead clearfix">
             <div class="inner">
-              <h3 class="masthead-brand">OhDiary | {{ .Diary.Author }}</h3>
+              <h3 class="masthead-brand">OhDiary</h3>
               <ul class="nav masthead-nav">
+                <li class="active"><a href="/diary">Home</a></li>
+                <li><a href="/import">Import</a></li>
                 <li><a href="/signout">Sign Out</a></li>
               </ul>
             </div>
           </div>
 
           <div class="inner cover">
-            <h1 class="cover-heading">Your email</h1>
+            <h1 class="cover-heading">{{ .DiaryEntriesCount }}</h1>
             <p class="lead">
-
-              <code>{{ .EmailAddress }}</code>
-              <p>
-                Send your daily diary entries to this email address and they will automatically be inserted into your diary.
-              </p>
-<!--
+              diary entries
+              
+              <!--
               {{range .DiaryEntries }}
                 <h4>{{ .CreatedAt }}</h4>
                 <pre>{{ .Content }}</pre>
               {{end}}
--->
-
-              <hr />
-
-
-              <h3>Import OhLife backup?</h3>
-              <center>
-              <form role="form" action="{{ .UploadUrl }}" method="POST" enctype="multipart/form-data">
-                <div class="form-group">
-                  <input type="file" name="file">
-                </div>
-                <input type="submit" class="btn btn-lg btn-default" name="submit" value="Upload">
-              </form>
-              </center>
-
+              -->
             </p>
           </div>
 
           <div class="mastfoot">
             <div class="inner">
-              Get involved on <a href="https://github.com/theill/diary">Github</a>.
+              Reply or send email to <b>{{ .EmailAddress }}</b> in order to add entries.
             </div>
           </div>
 

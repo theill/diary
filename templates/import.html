@@ -16,20 +16,28 @@
             <div class="inner">
               <h3 class="masthead-brand">OhDiary</h3>
               <ul class="nav masthead-nav">
-                <li class="active"><a href="/">Home</a></li>
-                <li><a href="/signup">Sign Up</a></li>
+                <li><a href="/diary">Home</a></li>
+                <li class="active"><a href="/import">Import</a></li>
+                <li><a href="/signout">Sign Out</a></li>
               </ul>
             </div>
           </div>
 
           <div class="inner cover">
-            <h1 class="cover-heading">An OhLife replacement</h1>
-            <p class="lead">As you might know the legendary service <a href="http://ohlife.com">OhLife</a> closed its doors in October 2014. This project has been made as an <a href="https://github.com/theill/diary">open-source OhLife alternative</a> and is developed using GO.</p>
+            <h1 class="cover-heading">Import OhLife backup?</h1>
+            <p class="lead">
+              <form role="form" action="{{ .UploadUrl }}" method="POST" enctype="multipart/form-data">
+                <div class="form-group">
+                  <center><input type="file" name="file" class="btn btn-lg"></center>
+                </div>
+                <input type="submit" class="btn btn-lg btn-default" name="submit" value="Upload">
+              </form>
+            </p>
           </div>
 
           <div class="mastfoot">
             <div class="inner">
-              Get involved on <a href="https://github.com/theill/diary">Github</a>.
+              
             </div>
           </div>
 

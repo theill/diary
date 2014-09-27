@@ -50,12 +50,17 @@ func init() {
   http.HandleFunc("/", root)
   http.HandleFunc("/signup", signup)
   http.HandleFunc("/signout", signout)
-  http.HandleFunc("/write", write)
+  http.HandleFunc("/import", importPage)
   http.HandleFunc("/diary", diary)
+  
+  // test
   http.HandleFunc("/setup", setup)
+  http.HandleFunc("/write", write)
+
+  // handlers
   http.HandleFunc("/mails/daily", dailyMail)
   http.HandleFunc("/_ah/mail/", incomingMail)
-  http.HandleFunc("/import", importOhLifeBackup)
+  http.HandleFunc("/ohlife_import", importOhLifeBackup)
 }
 
 func setup(w http.ResponseWriter, r *http.Request) {
@@ -87,6 +92,30 @@ func root(w http.ResponseWriter, r *http.Request) {
   }
 
   t.Execute(w, nil)
+}
+
+func importPage(w http.ResponseWriter, r *http.Request) {
+  c := appengine.NewContext(r)
+
+  t, err := template.ParseFiles("templates/import.html")
+  if err != nil {
+    http.Error(w, err.Error(), http.StatusInternalServerError)
+    return
+  }
+
+  uploadURL, err := blobstore.UploadURL(c, "/ohlife_import", nil)
+  if err != nil {
+    http.Error(w, err.Error(), http.StatusInternalServerError)
+    return
+  }
+
+  data := struct {
+    UploadUrl    *url.URL
+  } {
+    uploadURL,
+  }
+
+  t.Execute(w, data)
 }
 
 func signup(w http.ResponseWriter, r *http.Request) {
@@ -159,29 +188,24 @@ func diary(w http.ResponseWriter, r *http.Request) {
     return
   }
 
-  q := datastore.NewQuery("DiaryEntry").Ancestor(ancestorKey).Order("-CreatedAt").Limit(1)
-  entries := make([]DiaryEntry, 0, 5)
-  if _, err := q.GetAll(c, &entries); err != nil {
-    http.Error(w, err.Error(), http.StatusInternalServerError)
-    return
-  }
-
-  uploadURL, err := blobstore.UploadURL(c, "/import", nil)
-  if err != nil {
-    http.Error(w, err.Error(), http.StatusInternalServerError)
-    return
-  }
+  // q := datastore.NewQuery("DiaryEntry").Ancestor(ancestorKey).Order("-CreatedAt").Limit(1)
+  q, _ := datastore.NewQuery("DiaryEntry").Ancestor(ancestorKey).Count(c)
+  // entries := make([]DiaryEntry, 0, 5)
+  // if _, err := q.GetAll(c, &entries); err != nil {
+  //   http.Error(w, err.Error(), http.StatusInternalServerError)
+  //   return
+  // }
 
   data := struct {
     Diary Diary
-    DiaryEntries []DiaryEntry
+    // DiaryEntries []DiaryEntry
+    DiaryEntriesCount int
     EmailAddress string
-    UploadUrl    *url.URL
   } {
     diary,
-    entries,
+    // entries,
+    q,
     fmt.Sprintf(REPLY_TO_ADDRESS, diary.Token),
-    uploadURL,
   }
 
   t, err := template.ParseFiles("templates/diaries/index.html")
