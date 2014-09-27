@@ -7,8 +7,14 @@ inbound_services:
 - mail
 
 handlers:
-- url: /.*
-  script: _go_app
+- url: /css
+  static_dir: css
+- url: /images
+  static_dir: images
+- url: /js
+  static_dir: js
 - url: /mails/daily
   script: _go_app
-  login: admin
+  login: admin  
+- url: /.*
+  script: _go_app

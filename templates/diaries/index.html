@@ -1,19 +1,67 @@
 <html>
   <head>
     <title>Diary</title>
+    <link rel="stylesheet" href="/css/bootstrap.min.css">
+    <link rel="stylesheet" href="/css/cover.css">
   </head>
   <body>
-    <h1>Hi {{ .Diary.Author }}</h1>
-    <p>
-      Your personal email address is <code>{{ .EmailAddress }}</code> and should be used to add entries to your diary.
-    </p>
-    {{range .DiaryEntries }}
-      <h3>{{ .CreatedAt }}</h3>
-      <pre>{{ .Content }}</pre>
-    {{end}}
-    <hr />
-    <form action="/signout" method="post">
-      <div><input type="submit" value="Sign out"></div>
-    </form>
+
+  <div class="site-wrapper">
+
+      <div class="site-wrapper-inner">
+
+        <div class="cover-container">
+
+          <div class="masthead clearfix">
+            <div class="inner">
+              <h3 class="masthead-brand">OhDiary | {{ .Diary.Author }}</h3>
+              <ul class="nav masthead-nav">
+                <li><a href="/signout">Sign Out</a></li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="inner cover">
+            <h1 class="cover-heading">Your email</h1>
+            <p class="lead">
+
+              <code>{{ .EmailAddress }}</code>
+              <p>
+                Send your daily diary entries to this email address and they will automatically be inserted into your diary.
+              </p>
+<!--
+              {{range .DiaryEntries }}
+                <h4>{{ .CreatedAt }}</h4>
+                <pre>{{ .Content }}</pre>
+              {{end}}
+-->
+
+              <hr />
+
+
+              <h3>Import OhLife backup?</h3>
+              <center>
+              <form role="form" action="{{ .UploadUrl }}" method="POST" enctype="multipart/form-data">
+                <div class="form-group">
+                  <input type="file" name="file">
+                </div>
+                <input type="submit" class="btn btn-lg btn-default" name="submit" value="Upload">
+              </form>
+              </center>
+
+            </p>
+          </div>
+
+          <div class="mastfoot">
+            <div class="inner">
+              Get involved on <a href="https://github.com/theill/diary">Github</a>.
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
   </body>
 </html>

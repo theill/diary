@@ -4,11 +4,13 @@ import (
   "fmt"
   "html/template"
   "net/http"
+  "net/url"
   "net/mail"
   "time"
   "bytes"
   "strings"
   "crypto/md5"
+  "regexp"
 
   "io"
   "io/ioutil"
@@ -18,11 +20,12 @@ import (
 
   
   "appengine"
-  "appengine/urlfetch"
+  // "appengine/urlfetch"
   "appengine/datastore"
+  "appengine/blobstore"
   "appengine/user"
   appmail "appengine/mail"
-  "github.com/sendgrid/sendgrid-go"
+  // "github.com/sendgrid/sendgrid-go"
 )
 
 type AppConfiguration struct {
@@ -52,6 +55,7 @@ func init() {
   http.HandleFunc("/setup", setup)
   http.HandleFunc("/mails/daily", dailyMail)
   http.HandleFunc("/_ah/mail/", incomingMail)
+  http.HandleFunc("/import", importOhLifeBackup)
 }
 
 func setup(w http.ResponseWriter, r *http.Request) {
@@ -155,9 +159,15 @@ func diary(w http.ResponseWriter, r *http.Request) {
     return
   }
 
-  q := datastore.NewQuery("DiaryEntry").Ancestor(ancestorKey).Order("-CreatedAt").Limit(5)
+  q := datastore.NewQuery("DiaryEntry").Ancestor(ancestorKey).Order("-CreatedAt").Limit(1)
   entries := make([]DiaryEntry, 0, 5)
   if _, err := q.GetAll(c, &entries); err != nil {
+    http.Error(w, err.Error(), http.StatusInternalServerError)
+    return
+  }
+
+  uploadURL, err := blobstore.UploadURL(c, "/import", nil)
+  if err != nil {
     http.Error(w, err.Error(), http.StatusInternalServerError)
     return
   }
@@ -166,10 +176,12 @@ func diary(w http.ResponseWriter, r *http.Request) {
     Diary Diary
     DiaryEntries []DiaryEntry
     EmailAddress string
+    UploadUrl    *url.URL
   } {
     diary,
     entries,
     fmt.Sprintf(REPLY_TO_ADDRESS, diary.Token),
+    uploadURL,
   }
 
   t, err := template.ParseFiles("templates/diaries/index.html")
@@ -222,10 +234,10 @@ func dailyMail(w http.ResponseWriter, r *http.Request) {
     return
   }
 
-  sg := sendgrid.NewSendGridClient(appConfiguration.SendGridUser, appConfiguration.SendGridKey)
+  // sg := sendgrid.NewSendGridClient(appConfiguration.SendGridUser, appConfiguration.SendGridKey)
 
   // // set http.Client to use the appengine client
-  sg.Client = urlfetch.Client(c) //Just perform this swap, and you are good to go.
+  // sg.Client = urlfetch.Client(c) //Just perform this swap, and you are good to go.
 
   query := datastore.NewQuery("Diary").Order("-CreatedAt")
   for t := query.Run(c); ; {
@@ -384,6 +396,120 @@ func parseMailBody(c appengine.Context, msg *mail.Message) string {
   }
 
   return "ok"
+}
+
+func importOhLifeBackup(w http.ResponseWriter, r *http.Request) {
+  c := appengine.NewContext(r)
+  blobs, _, err := blobstore.ParseUpload(r)
+  if err != nil {
+    http.Error(w, err.Error(), http.StatusInternalServerError)
+    return
+  }
+  
+  file := blobs["file"]
+  if len(file) == 0 {
+    c.Errorf("no file uploaded")
+    http.Redirect(w, r, "/diary", http.StatusFound)
+    return
+  }
+
+  importedFile := blobstore.NewReader(c, file[0].BlobKey)
+
+  byteArray, err := ioutil.ReadAll(importedFile)
+  importedString := string(byteArray[:])
+
+  diaryReg := regexp.MustCompile("\\d{4}-\\d{2}-\\d{2}\r?\n\r?\n")
+
+  indexes := diaryReg.FindAllStringIndex(importedString, -1)
+  c.Infof("got indexes: %v", len(indexes))
+
+
+  u := user.Current(c)
+  ancestorKey := datastore.NewKey(c, "Diary", u.Email, 0, nil)
+
+  var diary Diary
+  if err := datastore.Get(c, ancestorKey, &diary); err != nil {
+    http.Error(w, err.Error(), http.StatusInternalServerError)
+    return
+  }
+
+  var diaryEntryKeys []*datastore.Key
+  var diaryEntries []DiaryEntry
+
+  const bulk_size = 75
+
+  // diaryEntryKeys = make([]*datastore.Key, len(indexes))
+  // diaryEntries = make([]DiaryEntry, len(indexes))
+  diaryEntryKeys = make([]*datastore.Key, bulk_size)
+  diaryEntries = make([]DiaryEntry, bulk_size)
+
+  var missing_save = false
+  for i := 0; i < len(indexes); i++ {
+    var diarySlice string
+    if ((i+1) < len(indexes)) {
+      diarySlice = importedString[indexes[i][0]:indexes[i+1][0]]
+    } else {
+      diarySlice = importedString[indexes[i][0]:]
+    }
+
+    createdAt, _ := time.Parse("2006-01-02", diarySlice[0:10])
+
+    diaryEntry := DiaryEntry {
+      CreatedAt: createdAt,
+      Content: strings.Trim(diarySlice[10:], "\n\r "),
+    }
+
+    diaryEntryKeys[i % bulk_size] = datastore.NewIncompleteKey(c, "DiaryEntry", ancestorKey)
+    diaryEntries[i % bulk_size] = diaryEntry
+
+    missing_save = true
+
+    if ((i + 1) % bulk_size == 0) {
+      c.Infof("Inserting bulk at index: %d", i)
+      _, err3 := datastore.PutMulti(c, diaryEntryKeys, diaryEntries)
+      if err3 != nil {
+        c.Errorf(err3.Error())
+      }
+      diaryEntryKeys = make([]*datastore.Key, bulk_size)
+      diaryEntries = make([]DiaryEntry, bulk_size)
+
+      missing_save = false
+    }
+  }
+
+  if (missing_save) {
+    remainingSaves := len(indexes) % bulk_size
+
+    _, err3 := datastore.PutMulti(c, diaryEntryKeys[:remainingSaves], diaryEntries[:remainingSaves])
+    if err3 != nil {
+      c.Errorf(err3.Error())
+    }
+  }  
+
+  // _, err3 := datastore.PutMulti(c, diaryEntryKeys, diaryEntries)
+  // if err3 != nil {
+  //   c.Errorf(err3.Error())
+  // }
+
+
+  // indexes := strings.Split(importedString, "\n")
+  // for i := 0; i < len(indexes); i++ {
+  //   // c.Infof("line starting: %d", i)
+
+  //   line := indexes[i]
+
+  //   if diaryReg.MatchString(line) {
+  //     c.Infof("might be a diary entry: %v", line)
+  //   }
+  // }
+
+  // indexes := regexp.MustCompile("\\d{4}-\\d{2}-\\d{2}\n\n").FindAllStringIndex(importedString, -1)
+  // for i := 0; i < len(indexes); i++ {
+  //   c.Infof("entry starting: %d", i)
+  // }
+
+  http.Redirect(w, r, "/diary", http.StatusFound)
+  // http.Redirect(w, r, "/serve/?blobKey=" + string(file[0].BlobKey), http.StatusFound)
 }
 
 const dailyMailMessage = `
