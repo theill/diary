@@ -15,6 +15,6 @@ handlers:
   static_dir: js
 - url: /mails/daily
   script: _go_app
-  login: admin  
+  login: admin
 - url: /.*
   script: _go_app

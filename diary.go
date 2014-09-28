@@ -1,5 +1,7 @@
 package commanigy
 
+// https://www.dropbox.com/s/n6fhr0u1wxxy044/Screenshot%202014-09-28%2020.55.38.png?dl=0
+
 import (
   "fmt"
   "html/template"
@@ -29,29 +31,32 @@ import (
 )
 
 type AppConfiguration struct {
-  SendGridUser  string
-  SendGridKey   string
+  SendGridUser    string
+  SendGridKey     string
 }
 
 type DiaryEntry struct {
-  CreatedAt   time.Time
-  Content     string      `datastore:",noindex"`
+  CreatedAt       time.Time
+  Content         string      `datastore:",noindex"`
 }
 
 type Diary struct {
-  CreatedAt   time.Time
-  Author      string
-  Token       string
+  CreatedAt       time.Time
+  Author          string
+  Token           string
+  TimeZone        string      // "Europe/Berlin"
+  TimeOffset      int         // 10
 }
 
 const REPLY_TO_ADDRESS string = "%s@commanigy-diary.appspotmail.com"
 
 func init() {
   http.HandleFunc("/", root)
-  http.HandleFunc("/signup", signup)
-  http.HandleFunc("/signout", signout)
+  http.HandleFunc("/signup", signupPage)
+  http.HandleFunc("/signout", signoutPage)
   http.HandleFunc("/import", importPage)
-  http.HandleFunc("/diary", diary)
+  http.HandleFunc("/settings", settingsPage)
+  http.HandleFunc("/diary", diaryPage)
   
   // test
   http.HandleFunc("/setup", setup)
@@ -118,7 +123,17 @@ func importPage(w http.ResponseWriter, r *http.Request) {
   t.Execute(w, data)
 }
 
-func signup(w http.ResponseWriter, r *http.Request) {
+func settingsPage(w http.ResponseWriter, r *http.Request) {
+  t, err := template.ParseFiles("templates/settings.html")
+  if err != nil {
+    http.Error(w, err.Error(), http.StatusInternalServerError)
+    return
+  }
+
+  t.Execute(w, nil)
+}
+
+func signupPage(w http.ResponseWriter, r *http.Request) {
   c := appengine.NewContext(r)
 
   u := user.Current(c)
@@ -157,7 +172,7 @@ func signup(w http.ResponseWriter, r *http.Request) {
   http.Redirect(w, r, "/diary", http.StatusFound)
 }
 
-func signout(w http.ResponseWriter, r *http.Request) {
+func signoutPage(w http.ResponseWriter, r *http.Request) {
   c := appengine.NewContext(r)
 
   u := user.Current(c)
@@ -175,7 +190,20 @@ func signout(w http.ResponseWriter, r *http.Request) {
   http.Redirect(w, r, "/", http.StatusFound)
 }
 
-func diary(w http.ResponseWriter, r *http.Request) {
+func getDiary(c appengine.Context) (Diary, error) {
+  u := user.Current(c)
+
+  ancestorKey := datastore.NewKey(c, "Diary", u.Email, 0, nil)
+
+  var diary Diary
+  if err := datastore.Get(c, ancestorKey, &diary); err != nil {
+    return Diary{}, err
+  }
+
+  return diary, nil
+}
+
+func diaryPage(w http.ResponseWriter, r *http.Request) {
   c := appengine.NewContext(r)
 
   u := user.Current(c)
@@ -188,22 +216,14 @@ func diary(w http.ResponseWriter, r *http.Request) {
     return
   }
 
-  // q := datastore.NewQuery("DiaryEntry").Ancestor(ancestorKey).Order("-CreatedAt").Limit(1)
   q, _ := datastore.NewQuery("DiaryEntry").Ancestor(ancestorKey).Count(c)
-  // entries := make([]DiaryEntry, 0, 5)
-  // if _, err := q.GetAll(c, &entries); err != nil {
-  //   http.Error(w, err.Error(), http.StatusInternalServerError)
-  //   return
-  // }
 
   data := struct {
     Diary Diary
-    // DiaryEntries []DiaryEntry
     DiaryEntriesCount int
     EmailAddress string
   } {
     diary,
-    // entries,
     q,
     fmt.Sprintf(REPLY_TO_ADDRESS, diary.Token),
   }
