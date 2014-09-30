@@ -1,12 +1,12 @@
 package ohdiary
 
 import (
-  "fmt"
   "net/http"
   "net/mail"
   "time"
   "bytes"
   "strings"
+  "encoding/base64"
 
   "io"
   "io/ioutil"
@@ -32,19 +32,19 @@ func incomingMail(w http.ResponseWriter, r *http.Request) {
     return
   }
   
-  msg, err2 := mail.ReadMessage(bytes.NewReader(b.Bytes()))
+  msg, err2 := mail.ReadMessage(strings.NewReader(b.String()))
   if err2 != nil {
     c.Errorf("Failed to read message: %s", err2)
     http.Error(w, err2.Error(), http.StatusInternalServerError)
     return
   }
 
-  var bodyBuffer bytes.Buffer
-  if _, err4 := bodyBuffer.ReadFrom(msg.Body); err4 != nil {
-    c.Errorf("Failed to read body: %s", err4)
-    http.Error(w, err4.Error(), http.StatusInternalServerError)
-    return
-  }
+  // var bodyBuffer bytes.Buffer
+  // if _, err4 := bodyBuffer.ReadFrom(msg.Body); err4 != nil {
+  //   c.Errorf("Failed to read body: %s", err4)
+  //   http.Error(w, err4.Error(), http.StatusInternalServerError)
+  //   return
+  // }
 
   addresses, err := msg.Header.AddressList("To")
   if err != nil {
@@ -79,14 +79,28 @@ func incomingMail(w http.ResponseWriter, r *http.Request) {
     return
   }
 
-  content := parseMailBody(c, msg)
+  // msg = &mail.Message{
+  //   Header: map[string][]string{
+  //     "Content-Type": []string{"multipart/mixed; boundary=foo"},
+  //   },
+  //   Body: strings.NewReader(bodyBuffer.String()),
+  // }
 
-  c.Infof("content => %s", content)
+  content, err := parseMailBody(c, msg)
+  if err != nil {
+    c.Errorf("Failed to parse mail body: %s", err)
+    return
+  }
+
+  if len(content) == 0 {
+    c.Infof("No content found in posted mail")
+    return
+  }
 
   diaryEntry := DiaryEntry {
     CreatedAt: time.Now().UTC(),
-    // Content: content,
-    Content: bodyBuffer.String(),
+    Content: content,
+    // Content: bodyBuffer.String(),
   }
 
   _, err5 := datastore.Put(c, diaryEntryKey, &diaryEntry)
@@ -99,34 +113,48 @@ func incomingMail(w http.ResponseWriter, r *http.Request) {
   c.Infof("Added new diary entry for key %s", diaryEntryKey)  
 }
 
-func parseMailBody(c appengine.Context, msg *mail.Message) string {
+func parseMailBody(c appengine.Context, msg *mail.Message) (string, error) {
   mediaType, params, err := mime.ParseMediaType(msg.Header.Get("Content-Type"))
   if err != nil {
     c.Errorf("Failed to parse content type %s", err)
-    return "1: " + err.Error()
+    return "", err
   }
-  c.Infof("mediaType %s", mediaType)
+
   if strings.HasPrefix(mediaType, "multipart/") {
-    c.Infof("boundary %s", params["boundary"])
     mr := multipart.NewReader(msg.Body, params["boundary"])
     for {
       p, err := mr.NextPart()
       if err == io.EOF {
-        c.Errorf("EOF %s", err)
-        return "eof"
+        return "", nil
       }
       if err != nil {
-        c.Errorf("Not EOF but something else %v", p)
-        return "2: " + err.Error()
+        c.Errorf("Failed to read next part of message: %v", p)
+        return "", err
       }
+      
       slurp, err := ioutil.ReadAll(p)
       if err != nil {
         c.Errorf("Reading all for slurp %s", err)
-        return "3: " + err.Error()
+        return "", err
       }
-      return fmt.Sprintf("Part %q: %q\n", p.Header.Get("Content-Type"), slurp)
+
+      transferEncoding := p.Header.Get("Content-Transfer-Encoding")
+      if (transferEncoding == "base64") {
+        decoder := base64.NewDecoder(base64.StdEncoding, bytes.NewReader(slurp))
+
+        decodedSlurp, err := ioutil.ReadAll(decoder)
+        if err != nil {
+          c.Errorf("Failed to decode block")
+          return "", err
+        }
+
+        return string(decodedSlurp), nil
+      }
+
+      c.Infof("Part %q: %q\n", p.Header.Get("Content-Type"), slurp)
+      return string(slurp), nil
     }
   }
 
-  return "ok"
+  return "", nil
 }
