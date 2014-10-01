@@ -55,6 +55,7 @@ func init() {
   http.HandleFunc("/signup", signupPage)
   http.HandleFunc("/signout", signoutPage)
   http.HandleFunc("/import", importPage)
+  http.HandleFunc("/latest", latestPage)
   http.HandleFunc("/settings", settingsPage)
   http.HandleFunc("/diary", diaryPage)
   
@@ -118,6 +119,24 @@ func importPage(w http.ResponseWriter, r *http.Request) {
     UploadUrl    *url.URL
   } {
     uploadURL,
+  }
+
+  t.Execute(w, data)
+}
+
+func latestPage(w http.ResponseWriter, r *http.Request) {
+  // c := appengine.NewContext(r)
+
+  t, err := template.ParseFiles("templates/latest.html")
+  if err != nil {
+    http.Error(w, err.Error(), http.StatusInternalServerError)
+    return
+  }
+
+  data := struct {
+
+  } {
+
   }
 
   t.Execute(w, data)

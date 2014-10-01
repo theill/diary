@@ -9,30 +9,31 @@
   <div class="site-wrapper">
 
       <div class="site-wrapper-inner">
+
         <div class="cover-container">
+
           <div class="masthead clearfix">
             <div class="inner">
               <h3 class="masthead-brand">OhDiary</h3>
               <ul class="nav masthead-nav">
-                <li class="active"><a href="/diary">Home</a></li>
+                <li><a href="/diary">Home</a></li>
                 <li><a href="/import">Import</a></li>
-                <li><a href="/latest">Latest</a></li>
-                <li><a href="/settings">Settings</a></li>
+                <li class="active"><a href="/latest">Latest</a></li>
                 <li><a href="/signout">Sign Out</a></li>
               </ul>
             </div>
           </div>
 
           <div class="inner cover">
-            <h1 class="cover-heading">{{ .DiaryEntriesCount }}</h1>
+            <h1 class="cover-heading">Latest</h1>
             <p class="lead">
-              diary entries
+              ...
             </p>
           </div>
 
           <div class="mastfoot">
             <div class="inner">
-              Reply or send email to <b>{{ .EmailAddress }}</b> in order to add entries.
+              
             </div>
           </div>
 
