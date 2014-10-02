@@ -1,6 +1,10 @@
 <div class="inner cover">
   <h1 class="cover-heading">Latest</h1>
-  <p class="lead">
-    ...
-  </p>
+  {{ range .DiaryEntries }}
+    <p class="lead">
+      <!-- Saturday, September 20, 2014 -->
+      {{ .CreatedAt | formattedDiaryEntryDate }}
+      <pre>{{ .Content | html }}</pre>
+    </p>
+  {{ end }}
 </div>

@@ -44,6 +44,9 @@ var AppHelpers = template.FuncMap{
 
     return "", nil
   },
+  "formattedDiaryEntryDate": func(diaryEntryDate time.Time) (string, error) {
+    return diaryEntryDate.Format("Monday, January 2"), nil
+  },
   "authenticated": func(username string) (bool, error) {
     return len(username) > 0, nil
   },
@@ -129,10 +132,21 @@ func init() {
 
     u := user.Current(c)
 
+    ancestorKey := datastore.NewKey(c, "Diary", u.Email, 0, nil)
+
+    q := datastore.NewQuery("DiaryEntry").Ancestor(ancestorKey).Order("-CreatedAt").Limit(1)
+    var diaryEntries []DiaryEntry
+    _, err := q.GetAll(c, &diaryEntries)
+    if err != nil {
+      return
+    }
+
     data := struct {
       CurrentUser   string
+      DiaryEntries  []DiaryEntry
     } {
       u.String(),
+      diaryEntries,
     }
 
     r.HTML(200, "latest", data)
@@ -304,40 +318,6 @@ func getDiary(c appengine.Context) (Diary, error) {
   }
 
   return diary, nil
-}
-
-func diaryPage(w http.ResponseWriter, r *http.Request) {
-  c := appengine.NewContext(r)
-
-  u := user.Current(c)
-
-  ancestorKey := datastore.NewKey(c, "Diary", u.Email, 0, nil)
-
-  var diary Diary
-  if err := datastore.Get(c, ancestorKey, &diary); err != nil {
-    http.Error(w, err.Error(), http.StatusInternalServerError)
-    return
-  }
-
-  q, _ := datastore.NewQuery("DiaryEntry").Ancestor(ancestorKey).Count(c)
-
-  data := struct {
-    Diary Diary
-    DiaryEntriesCount int
-    EmailAddress string
-  } {
-    diary,
-    q,
-    fmt.Sprintf(REPLY_TO_ADDRESS, diary.Token),
-  }
-
-  t, err := template.ParseFiles("templates/diaries/index.html")
-  if err != nil {
-    http.Error(w, err.Error(), http.StatusInternalServerError)
-    return
-  }
-
-  t.Execute(w, data)  
 }
 
 // for testing purposes
