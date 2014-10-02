@@ -34,24 +34,6 @@ import (
   // "github.com/sendgrid/sendgrid-go"
 )
 
-type AppConfiguration struct {
-  SendGridUser    string
-  SendGridKey     string
-}
-
-type DiaryEntry struct {
-  CreatedAt       time.Time
-  Content         string      `datastore:",noindex"`
-}
-
-type Diary struct {
-  CreatedAt       time.Time
-  Author          string
-  Token           string
-  TimeZone        string      // "Europe/Berlin"
-  TimeOffset      int         // 10
-}
-
 const REPLY_TO_ADDRESS string = "%s@commanigy-diary.appspotmail.com"
 
 var AppHelpers = template.FuncMap{
@@ -107,6 +89,7 @@ func init() {
     IndentJSON: true,
     IndentXML: true,
   }))
+  m.Use(martini.Logger())
   m.Get("/", func(r render.Render, req *http.Request) {
     // c := appengine.NewContext(req)
 
@@ -120,34 +103,7 @@ func init() {
 
     r.HTML(200, "index", data)
   })
-  m.Get("/diary", func(r render.Render, req *http.Request) {
-    c := appengine.NewContext(req)
-
-    u := user.Current(c)
-
-    ancestorKey := datastore.NewKey(c, "Diary", u.Email, 0, nil)
-
-    var diary Diary
-    if err := datastore.Get(c, ancestorKey, &diary); err != nil {
-      return
-    }
-
-    q, _ := datastore.NewQuery("DiaryEntry").Ancestor(ancestorKey).Count(c)
-
-    data := struct {
-      Diary Diary
-      DiaryEntriesCount int
-      EmailAddress string
-      CurrentUser string
-    } {
-      diary,
-      q,
-      fmt.Sprintf(REPLY_TO_ADDRESS, diary.Token),
-      u.String(),
-    }
-
-    r.HTML(200, "diaries/index", data)
-  })
+  m.Get("/diary", DiariesControllerIndex)
   m.Get("/import", func(r render.Render, req *http.Request) {
     c := appengine.NewContext(req)
 
