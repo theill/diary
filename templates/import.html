@@ -1,50 +1,11 @@
-<html>
-  <head>
-    <title>Diary</title>
-    <link rel="stylesheet" href="/css/bootstrap.min.css">
-    <link rel="stylesheet" href="/css/cover.css">
-  </head>
-  <body>
-
-  <div class="site-wrapper">
-
-      <div class="site-wrapper-inner">
-
-        <div class="cover-container">
-
-          <div class="masthead clearfix">
-            <div class="inner">
-              <h3 class="masthead-brand">OhDiary</h3>
-              <ul class="nav masthead-nav">
-                <li><a href="/diary">Home</a></li>
-                <li class="active"><a href="/import">Import</a></li>
-                <li><a href="/signout">Sign Out</a></li>
-              </ul>
-            </div>
-          </div>
-
-          <div class="inner cover">
-            <h1 class="cover-heading">Import OhLife backup?</h1>
-            <p class="lead">
-              <form role="form" action="{{ .UploadUrl }}" method="POST" enctype="multipart/form-data">
-                <div class="form-group">
-                  <center><input type="file" name="file" class="btn btn-lg"></center>
-                </div>
-                <input type="submit" class="btn btn-lg btn-default" name="submit" value="Upload">
-              </form>
-            </p>
-          </div>
-
-          <div class="mastfoot">
-            <div class="inner">
-              
-            </div>
-          </div>
-
-        </div>
-
+<div class="inner cover">
+  <h1 class="cover-heading">Import OhLife backup?</h1>
+  <p class="lead">
+    <form role="form" action="{{ .UploadUrl }}" method="POST" enctype="multipart/form-data">
+      <div class="form-group">
+        <center><input type="file" name="file" class="btn btn-lg"></center>
       </div>
-
-    </div>
-  </body>
-</html>
+      <input type="submit" class="btn btn-lg btn-default" name="submit" value="Upload">
+    </form>
+  </p>
+</div>

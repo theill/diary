@@ -13,6 +13,10 @@ import (
   "strings"
   "crypto/md5"
   "regexp"
+  "errors"
+
+  "github.com/go-martini/martini"
+  "github.com/martini-contrib/render"
 
   // "io"
   "io/ioutil"
@@ -50,14 +54,41 @@ type Diary struct {
 
 const REPLY_TO_ADDRESS string = "%s@commanigy-diary.appspotmail.com"
 
+var AppHelpers = template.FuncMap{
+  "menu_css_class": func(actualName string, templateName string) (string, error) {
+    if actualName == templateName {
+      return "active", nil
+    }
+
+    return "", nil
+  },
+  "authenticated": func(username string) (bool, error) {
+    return len(username) > 0, nil
+  },
+  "dict": func(values ...interface{}) (map[string]interface{}, error) {
+      if len(values)%2 != 0 {
+          return nil, errors.New("invalid dict call")
+      }
+      dict := make(map[string]interface{}, len(values)/2)
+      for i := 0; i < len(values); i+=2 {
+          key, ok := values[i].(string)
+          if !ok {
+              return nil, errors.New("dict keys must be strings")
+          }
+          dict[key] = values[i+1]
+      }
+      return dict, nil
+  },  
+}
+
 func init() {
-  http.HandleFunc("/", root)
+  // http.HandleFunc("/", root)
   http.HandleFunc("/signup", signupPage)
   http.HandleFunc("/signout", signoutPage)
-  http.HandleFunc("/import", importPage)
-  http.HandleFunc("/latest", latestPage)
-  http.HandleFunc("/settings", settingsPage)
-  http.HandleFunc("/diary", diaryPage)
+  // http.HandleFunc("/import", importPage)
+  // http.HandleFunc("/latest", latestPage)
+  // http.HandleFunc("/settings", settingsPage)
+  // http.HandleFunc("/diary", diaryPage)
   
   // test
   http.HandleFunc("/setup", setup)
@@ -67,6 +98,103 @@ func init() {
   http.HandleFunc("/mails/daily", dailyMail)
   http.HandleFunc("/_ah/mail/", incomingMail)
   http.HandleFunc("/ohlife_import", importOhLifeBackup)
+
+  m := martini.Classic()
+  m.Use(render.Renderer(render.Options{
+    Layout: "layout",
+    Extensions: []string{".tmpl", ".html"},
+    Funcs: []template.FuncMap{ AppHelpers },
+    IndentJSON: true,
+    IndentXML: true,
+  }))
+  m.Get("/", func(r render.Render, req *http.Request) {
+    // c := appengine.NewContext(req)
+
+    // u := user.Current(c)
+    
+    data := struct {
+      CurrentUser   string
+    } {
+      "",
+    }
+
+    r.HTML(200, "index", data)
+  })
+  m.Get("/diary", func(r render.Render, req *http.Request) {
+    c := appengine.NewContext(req)
+
+    u := user.Current(c)
+
+    ancestorKey := datastore.NewKey(c, "Diary", u.Email, 0, nil)
+
+    var diary Diary
+    if err := datastore.Get(c, ancestorKey, &diary); err != nil {
+      return
+    }
+
+    q, _ := datastore.NewQuery("DiaryEntry").Ancestor(ancestorKey).Count(c)
+
+    data := struct {
+      Diary Diary
+      DiaryEntriesCount int
+      EmailAddress string
+      CurrentUser string
+    } {
+      diary,
+      q,
+      fmt.Sprintf(REPLY_TO_ADDRESS, diary.Token),
+      u.String(),
+    }
+
+    r.HTML(200, "diaries/index", data)
+  })
+  m.Get("/import", func(r render.Render, req *http.Request) {
+    c := appengine.NewContext(req)
+
+    u := user.Current(c)
+
+    uploadURL, err := blobstore.UploadURL(c, "/ohlife_import", nil)
+    if err != nil {
+      return
+    }
+
+    data := struct {
+      UploadUrl    *url.URL
+      CurrentUser   string
+    } {
+      uploadURL,
+      u.String(),
+    }
+
+    r.HTML(200, "import", data)
+  })
+  m.Get("/latest", func(r render.Render, req *http.Request) {
+    c := appengine.NewContext(req)
+
+    u := user.Current(c)
+
+    data := struct {
+      CurrentUser   string
+    } {
+      u.String(),
+    }
+
+    r.HTML(200, "latest", data)
+  })
+  m.Get("/settings", func(r render.Render, req *http.Request) {
+    c := appengine.NewContext(req)
+
+    u := user.Current(c)
+    
+    data := struct {
+      CurrentUser   string
+    } {
+      u.String(),
+    }
+
+    r.HTML(200, "settings", data)
+  })
+  http.Handle("/", m)  
 }
 
 func setup(w http.ResponseWriter, r *http.Request) {

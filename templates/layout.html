@@ -1,0 +1,25 @@
+<html>
+  <head>
+    <title>Diary</title>
+    <link rel="stylesheet" href="/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="/css/cover.css" />
+  </head>
+  <body>
+
+  <div class="site-wrapper">
+      <div class="site-wrapper-inner">
+        <div class="cover-container">
+          <div class="masthead clearfix">
+            {{ template "_menu" dict "Current" current "CurrentUser" .CurrentUser }}
+          </div>
+
+          {{ yield }}
+
+          <div class="mastfoot">
+            {{ template "_footer" }}
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
