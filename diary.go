@@ -7,7 +7,6 @@ import (
   "html/template"
   "net/http"
   "net/url"
-  // "net/mail"
   "time"
   // "bytes"
   "strings"
@@ -351,6 +350,8 @@ func write(w http.ResponseWriter, r *http.Request) {
 }
 
 func dailyMail(w http.ResponseWriter, r *http.Request) {
+  // TODO: include "remember, one (week|month|year) ago you wrote" in mails
+  
   c := appengine.NewContext(r)
 
   configurationKey := datastore.NewKey(c, "AppConfiguration", "global", 0, nil)

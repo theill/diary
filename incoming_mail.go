@@ -7,6 +7,7 @@ import (
   "bytes"
   "strings"
   "encoding/base64"
+  "regexp"
 
   "io"
   "io/ioutil"
@@ -20,7 +21,6 @@ import (
 func incomingMail(w http.ResponseWriter, r *http.Request) {
   // TODO: parse mail body and extract important part
   // TODO: discard messages which are too big
-  // TODO: include "remember, one (week|month|year) ago you wrote" in mails
 
   c := appengine.NewContext(r)
 
@@ -38,13 +38,6 @@ func incomingMail(w http.ResponseWriter, r *http.Request) {
     http.Error(w, err2.Error(), http.StatusInternalServerError)
     return
   }
-
-  // var bodyBuffer bytes.Buffer
-  // if _, err4 := bodyBuffer.ReadFrom(msg.Body); err4 != nil {
-  //   c.Errorf("Failed to read body: %s", err4)
-  //   http.Error(w, err4.Error(), http.StatusInternalServerError)
-  //   return
-  // }
 
   addresses, err := msg.Header.AddressList("To")
   if err != nil {
@@ -79,13 +72,6 @@ func incomingMail(w http.ResponseWriter, r *http.Request) {
     return
   }
 
-  // msg = &mail.Message{
-  //   Header: map[string][]string{
-  //     "Content-Type": []string{"multipart/mixed; boundary=foo"},
-  //   },
-  //   Body: strings.NewReader(bodyBuffer.String()),
-  // }
-
   content, err := parseMailBody(c, msg)
   if err != nil {
     c.Errorf("Failed to parse mail body: %s", err)
@@ -97,10 +83,23 @@ func incomingMail(w http.ResponseWriter, r *http.Request) {
     return
   }
 
+  const layout = "Monday, Jan 2"
+  subject := msg.Header.Get("Subject")
+  re := regexp.MustCompile("It's (.*) - How did your day go?")
+  entryDate := re.FindAllStringSubmatch(subject, -1)[0][1]
+  c.Infof("Entry date %v", entryDate)
+  entryCreatedAt, err := time.Parse(layout, entryDate)
+  if err != nil {
+    entryCreatedAt = time.Now().UTC()
+  }
+
+  // TODO: we need to apply "year"
+
+  c.Infof("Date returned is %v", entryCreatedAt)
+
   diaryEntry := DiaryEntry {
-    CreatedAt: time.Now().UTC(),
+    CreatedAt: entryCreatedAt,
     Content: content,
-    // Content: bodyBuffer.String(),
   }
 
   _, err5 := datastore.Put(c, diaryEntryKey, &diaryEntry)
