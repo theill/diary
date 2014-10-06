@@ -93,7 +93,8 @@ func incomingMail(w http.ResponseWriter, r *http.Request) {
     entryCreatedAt = time.Now().UTC()
   }
 
-  // TODO: we need to apply "year"
+  // apply current year
+  entryCreatedAt = time.Date(time.Now().UTC().Year(), entryCreatedAt.Month(), entryCreatedAt.Day(), 0, 0, 0, 0, time.UTC)
 
   c.Infof("Date returned is %v", entryCreatedAt)
 
