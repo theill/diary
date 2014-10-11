@@ -114,6 +114,7 @@ func incomingMail(w http.ResponseWriter, r *http.Request) {
 }
 
 func stripSignature(body string) string {
+  // if you were cool => http://www.cs.cmu.edu/~vitor/papers/sigFilePaper_finalversion.ps
   signatureMatcher := regexp.MustCompile("-- ?\n.*")
   return signatureMatcher.ReplaceAllString(body, "")
 }
