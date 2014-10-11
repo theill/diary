@@ -100,7 +100,7 @@ func incomingMail(w http.ResponseWriter, r *http.Request) {
 
   diaryEntry := DiaryEntry {
     CreatedAt: entryCreatedAt,
-    Content: content,
+    Content: stripSignature(content),
   }
 
   _, err5 := datastore.Put(c, diaryEntryKey, &diaryEntry)
@@ -111,6 +111,11 @@ func incomingMail(w http.ResponseWriter, r *http.Request) {
   }
 
   c.Infof("Added new diary entry for key %s", diaryEntryKey)  
+}
+
+func stripSignature(body string) string {
+  signatureMatcher := regexp.MustCompile("-- ?\n.*")
+  return signatureMatcher.ReplaceAllString(body, "")
 }
 
 func parseMailBody(c appengine.Context, msg *mail.Message) (string, error) {
