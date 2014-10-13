@@ -19,7 +19,6 @@ import (
 )
 
 func incomingMail(w http.ResponseWriter, r *http.Request) {
-  // TODO: parse mail body and extract important part
   // TODO: discard messages which are too big
 
   c := appengine.NewContext(r)
@@ -83,23 +82,10 @@ func incomingMail(w http.ResponseWriter, r *http.Request) {
     return
   }
 
-  const layout = "Monday, Jan 2"
   subject := msg.Header.Get("Subject")
-  re := regexp.MustCompile("It's (.*) - How did your day go?")
-  entryDate := re.FindAllStringSubmatch(subject, -1)[0][1]
-  c.Infof("Entry date %v", entryDate)
-  entryCreatedAt, err := time.Parse(layout, entryDate)
-  if err != nil {
-    entryCreatedAt = time.Now().UTC()
-  }
-
-  // apply current year
-  entryCreatedAt = time.Date(time.Now().UTC().Year(), entryCreatedAt.Month(), entryCreatedAt.Day(), 0, 0, 0, 0, time.UTC)
-
-  c.Infof("Date returned is %v", entryCreatedAt)
 
   diaryEntry := DiaryEntry {
-    CreatedAt: entryCreatedAt,
+    CreatedAt: extractDiaryEntryDate(subject),
     Content: stripSignature(content),
   }
 
@@ -111,6 +97,19 @@ func incomingMail(w http.ResponseWriter, r *http.Request) {
   }
 
   c.Infof("Added new diary entry for key %s", diaryEntryKey)  
+}
+
+func extractDiaryEntryDate(subject string) time.Time {
+  subjectParsingExpression := regexp.MustCompile("It's (.*) - How did your day go?")
+  entryDate := subjectParsingExpression.FindAllStringSubmatch(subject, -1)[0][1]
+
+  entryCreatedAt, err := time.Parse("Monday, Jan 2", entryDate)
+  if err != nil {
+    entryCreatedAt = time.Now().UTC()
+  }
+
+  // apply current year to parsed value
+  return time.Date(time.Now().UTC().Year(), entryCreatedAt.Month(), entryCreatedAt.Day(), 0, 0, 0, 0, time.UTC)
 }
 
 func stripSignature(body string) string {
