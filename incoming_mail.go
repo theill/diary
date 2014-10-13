@@ -114,8 +114,8 @@ func extractDiaryEntryDate(subject string) time.Time {
 
 func stripSignature(body string) string {
   // if you were cool => http://www.cs.cmu.edu/~vitor/papers/sigFilePaper_finalversion.ps
-  signatureMatcher := regexp.MustCompile("-- ?[\n\r].*")
-  return signatureMatcher.ReplaceAllString(body, "")
+  signatureMatcher := regexp.MustCompile("-- ?[\n\r]")
+  return signatureMatcher.Split(body, -1)[0]
 }
 
 func parseMailBody(c appengine.Context, msg *mail.Message) (string, error) {
