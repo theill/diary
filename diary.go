@@ -23,7 +23,6 @@ import (
   // "log"
   // "mime/multipart"
 
-  
   "appengine"
   // "appengine/urlfetch"
   "appengine/datastore"
@@ -50,18 +49,18 @@ var AppHelpers = template.FuncMap{
     return len(username) > 0, nil
   },
   "dict": func(values ...interface{}) (map[string]interface{}, error) {
-      if len(values)%2 != 0 {
-          return nil, errors.New("invalid dict call")
+    if len(values)%2 != 0 {
+      return nil, errors.New("invalid dict call")
+    }
+    dict := make(map[string]interface{}, len(values)/2)
+    for i := 0; i < len(values); i+=2 {
+      key, ok := values[i].(string)
+      if !ok {
+        return nil, errors.New("dict keys must be strings")
       }
-      dict := make(map[string]interface{}, len(values)/2)
-      for i := 0; i < len(values); i+=2 {
-          key, ok := values[i].(string)
-          if !ok {
-              return nil, errors.New("dict keys must be strings")
-          }
-          dict[key] = values[i+1]
-      }
-      return dict, nil
+      dict[key] = values[i+1]
+    }
+    return dict, nil
   },  
 }
 
@@ -319,6 +318,39 @@ func getDiary(c appengine.Context) (Diary, error) {
   return diary, nil
 }
 
+func diaryEntryOneYearAgo(c appengine.Context) (DiaryEntry, error) {
+  u := user.Current(c)  
+
+  ancestorKey := datastore.NewKey(c, "Diary", u.Email, 0, nil)
+
+  var diary Diary
+  err := datastore.Get(c, ancestorKey, &diary)
+  if err != nil {
+    return DiaryEntry{}, err
+  }
+
+  year, month, day := time.Now().UTC().AddDate(-1, 0, 0).Date()
+  oneYearAgo := time.Date(year, month, day, 0, 0, 0, 0,  time.UTC)
+  c.Infof("Checking entry for %s", oneYearAgo)
+
+  q := datastore.NewQuery("DiaryEntry").
+    Ancestor(ancestorKey).
+    Filter("CreatedAt >=", oneYearAgo).
+    Filter("CreatedAt <", oneYearAgo.AddDate(0, 0, 1)).
+    Limit(1)
+  var diaryEntries []DiaryEntry
+  _, err2 := q.GetAll(c, &diaryEntries)
+  if err2 != nil {
+    return DiaryEntry{}, err2
+  }
+
+  if len(diaryEntries) == 0 {
+    return DiaryEntry{}, errors.New("No entry from last year")
+  }
+
+  return diaryEntries[0], nil
+}
+
 // for testing purposes
 func write(w http.ResponseWriter, r *http.Request) {
   c := appengine.NewContext(r)
@@ -333,6 +365,36 @@ func write(w http.ResponseWriter, r *http.Request) {
     http.Error(w, err.Error(), http.StatusInternalServerError)
     return
   }
+
+  diaryEntry2, err2 := diaryEntryOneYearAgo(c)
+  content := diaryEntry2.Content
+  c.Infof("Got content: %s. error: %s", content, err2)
+
+  // year, month, day := time.Now().UTC().AddDate(-1, 0, 0).Date()
+  // oneYearAgo := time.Date(year, month, day, 0, 0, 0, 0,  time.UTC)
+  // c.Infof("Checking entry for %s", oneYearAgo)
+
+  // query := datastore.NewQuery("DiaryEntry").
+  //   Filter("CreatedAt >=", oneYearAgo).
+  //   Filter("CreatedAt <", oneYearAgo.AddDate(0, 0, 1)).
+  //   Limit(1)
+  // for t := query.Run(c); ; {
+  //   var diaryEntry DiaryEntry
+  //   _, err := t.Next(&diaryEntry)
+  //   if err == datastore.Done {
+  //     c.Infof("No entry from one year ago: %s", oneYearAgo)
+  //     break
+  //   }
+  //   if err != nil {
+  //     c.Errorf("Failed to populate diaryEntry: %v", err)
+  //     continue
+  //   }
+
+  //   content := diaryEntry.Content
+  //   c.Infof("Got content: %s", content)
+  // }
+
+  return
 
   diaryEntry := DiaryEntry {
     CreatedAt: time.Now().UTC(),
@@ -381,6 +443,14 @@ func dailyMail(w http.ResponseWriter, r *http.Request) {
 
     token := diary.Token
 
+    var yearOldDiaryEntryContent string
+    
+    if yearOldDiaryEntry, err := diaryEntryOneYearAgo(c); err != nil {
+      yearOldDiaryEntryContent = fmt.Sprintf("Remember this? One year ago you wrote...<br><br>%s<br><br>", yearOldDiaryEntry.Content)
+    } else {
+      yearOldDiaryEntryContent = ""
+    }
+
     const layout = "Monday, Jan 2"
     today := time.Now().UTC().Format(layout)
 
@@ -388,8 +458,8 @@ func dailyMail(w http.ResponseWriter, r *http.Request) {
       Sender:   "Diary Support <" + fmt.Sprintf(REPLY_TO_ADDRESS, token) + ">",
       To:       []string{diary.Author},
       Subject:  fmt.Sprintf("It's %s - How did your day go?", today),
-      Body:     fmt.Sprintf(dailyMailMessage, token),
-      HTMLBody: fmt.Sprintf(dailyHtmlMailMessage, token),
+      Body:     fmt.Sprintf(dailyMailMessage, yearOldDiaryEntryContent, token),
+      HTMLBody: fmt.Sprintf(dailyHtmlMailMessage, yearOldDiaryEntryContent, token),
     }
     if err := appmail.Send(c, msg); err != nil {
       c.Errorf("Couldn't send email: %v", err)
@@ -643,6 +713,8 @@ func importOhLifeBackup(w http.ResponseWriter, r *http.Request) {
 const dailyMailMessage = `
 Just reply to this email with your entry.
 
+%s
+
 You can see your past entries here:
 https://commanigy-diary.appspot.com/latest
 
@@ -693,7 +765,7 @@ const dailyHtmlMailMessage = `
   </head>
   <body>
     Just reply to this email with your entry.<br>
-<br>
+<br>%s
 <a href="https://commanigy-diary.appspot.com/latest">Past entries</a> | <a href="https://commanigy-diary.appspot.com/settings/emailfrequency?token=%s">Unsubscribe</a>
  </body>
 </html>

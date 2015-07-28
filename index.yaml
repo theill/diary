@@ -39,6 +39,11 @@ indexes:
   ancestor: yes
   properties:
   - name: CreatedAt
+
+- kind: DiaryEntry
+  ancestor: yes
+  properties:
+  - name: CreatedAt
     direction: desc
 
 - kind: Greeting
