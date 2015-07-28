@@ -318,10 +318,8 @@ func getDiary(c appengine.Context) (Diary, error) {
   return diary, nil
 }
 
-func diaryEntryOneYearAgo(c appengine.Context) (DiaryEntry, error) {
-  u := user.Current(c)  
-
-  ancestorKey := datastore.NewKey(c, "Diary", u.Email, 0, nil)
+func diaryEntryOneYearAgo(c appengine.Context, emailAddress string) (DiaryEntry, error) {
+  ancestorKey := datastore.NewKey(c, "Diary", emailAddress, 0, nil)
 
   var diary Diary
   err := datastore.Get(c, ancestorKey, &diary)
@@ -366,7 +364,7 @@ func write(w http.ResponseWriter, r *http.Request) {
     return
   }
 
-  diaryEntry2, err2 := diaryEntryOneYearAgo(c)
+  diaryEntry2, err2 := diaryEntryOneYearAgo(c, u.Email)
   content := diaryEntry2.Content
   c.Infof("Got content: %s. error: %s", content, err2)
 
@@ -412,8 +410,6 @@ func write(w http.ResponseWriter, r *http.Request) {
 }
 
 func dailyMail(w http.ResponseWriter, r *http.Request) {
-  // TODO: include "remember, one (week|month|year) ago you wrote" in mails
-  
   c := appengine.NewContext(r)
 
   configurationKey := datastore.NewKey(c, "AppConfiguration", "global", 0, nil)
@@ -445,7 +441,7 @@ func dailyMail(w http.ResponseWriter, r *http.Request) {
 
     var yearOldDiaryEntryContent string
     
-    if yearOldDiaryEntry, err := diaryEntryOneYearAgo(c); err != nil {
+    if yearOldDiaryEntry, err := diaryEntryOneYearAgo(c, diary.Author); err != nil {
       yearOldDiaryEntryContent = fmt.Sprintf("Remember this? One year ago you wrote...<br><br>%s<br><br>", yearOldDiaryEntry.Content)
     } else {
       yearOldDiaryEntryContent = ""
@@ -620,7 +616,6 @@ func importOhLifeBackup(w http.ResponseWriter, r *http.Request) {
 
   indexes := diaryReg.FindAllStringIndex(importedString, -1)
   c.Infof("got indexes: %v", len(indexes))
-
 
   u := user.Current(c)
   ancestorKey := datastore.NewKey(c, "Diary", u.Email, 0, nil)
