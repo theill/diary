@@ -339,10 +339,12 @@ func diaryEntryOneYearAgo(c appengine.Context, emailAddress string) (DiaryEntry,
   var diaryEntries []DiaryEntry
   _, err2 := q.GetAll(c, &diaryEntries)
   if err2 != nil {
+    c.Errorf("Unable to read diary entries. %v", err2)
     return DiaryEntry{}, err2
   }
 
   if len(diaryEntries) == 0 {
+    c.Infof("No entry found for %s till %s", oneYearAgo, oneYearAgo.AddDate(0, 0, 1))
     return DiaryEntry{}, errors.New("No entry from last year")
   }
 
