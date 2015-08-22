@@ -344,7 +344,7 @@ func diaryEntryOneYearAgo(c appengine.Context, emailAddress string) (DiaryEntry,
   }
 
   if len(diaryEntries) == 0 {
-    c.Infof("No entry found for %s till %s", oneYearAgo, oneYearAgo.AddDate(0, 0, 1))
+    c.Infof("No entry found between %s and %s", oneYearAgo, oneYearAgo.AddDate(0, 0, 1))
     return DiaryEntry{}, errors.New("No entry from last year")
   }
 
@@ -443,7 +443,7 @@ func dailyMail(w http.ResponseWriter, r *http.Request) {
 
     var yearOldDiaryEntryContent string
     
-    if yearOldDiaryEntry, err := diaryEntryOneYearAgo(c, diary.Author); err != nil {
+    if yearOldDiaryEntry, err := diaryEntryOneYearAgo(c, diary.Author); err == nil {
       yearOldDiaryEntryContent = fmt.Sprintf("Remember this? One year ago you wrote...<br><br>%s<br><br>", yearOldDiaryEntry.Content)
     } else {
       yearOldDiaryEntryContent = ""
