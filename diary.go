@@ -13,6 +13,7 @@ import (
   "crypto/md5"
   "regexp"
   "errors"
+  "encoding/json"
 
   "github.com/go-martini/martini"
   "github.com/martini-contrib/render"
@@ -28,6 +29,7 @@ import (
   "appengine/datastore"
   "appengine/blobstore"
   "appengine/user"
+  "appengine/search"
   appmail "appengine/mail"
   // "github.com/sendgrid/sendgrid-go"
 )
@@ -72,10 +74,12 @@ func init() {
   // http.HandleFunc("/latest", latestPage)
   // http.HandleFunc("/settings", settingsPage)
   // http.HandleFunc("/diary", diaryPage)
-  
+
+  http.HandleFunc("/api/searches", apiSearchesPage)
+
   // test
   http.HandleFunc("/setup", setup)
-  http.HandleFunc("/write", write)
+  http.HandleFunc("/test", test)
 
   // handlers
   http.HandleFunc("/mails/daily", dailyMail)
@@ -305,6 +309,50 @@ func signoutPage(w http.ResponseWriter, r *http.Request) {
   http.Redirect(w, r, "/", http.StatusFound)
 }
 
+func apiSearchesPage(w http.ResponseWriter, r *http.Request) {
+  c := appengine.NewContext(r)
+
+  u := user.Current(c)
+  if u != nil {
+    index, err := search.Open("diaryEntries")
+    if err != nil {
+      http.Error(w, err.Error(), http.StatusInternalServerError)
+      return
+    }
+
+    query := r.URL.Query().Get("q")
+
+    w.Header().Set("Content-Type", "application/json")
+
+    for t := index.Search(c, query, nil); ; {
+      var doc DiaryEntry
+      id, err := t.Next(&doc)
+      if err == search.Done {
+        break
+      }
+      if err != nil {
+        http.Error(w, err.Error(), http.StatusInternalServerError)
+        return
+      }
+      c.Infof("%s -> %#v\n", id, doc.Content)
+
+      js, err := json.Marshal(doc)
+      if err != nil {
+        http.Error(w, err.Error(), http.StatusInternalServerError)
+        return
+      }
+      w.Write(js)
+    }
+
+    c.Infof("Done with search for %s", query)
+  }
+  else {
+    // http.Redirect(w, r, "/", http.StatusNotFound)
+  }
+
+  // http.Redirect(w, r, "/", http.StatusFound)
+}
+
 func getDiary(c appengine.Context) (Diary, error) {
   u := user.Current(c)
 
@@ -352,23 +400,117 @@ func diaryEntryOneYearAgo(c appengine.Context, emailAddress string) (DiaryEntry,
 }
 
 // for testing purposes
-func write(w http.ResponseWriter, r *http.Request) {
+func test(w http.ResponseWriter, r *http.Request) {
   c := appengine.NewContext(r)
 
-  u := user.Current(c)
+  type Doc struct {
+    Author     string
+    DiaryEntry string
+    Content    string
+    CreatedAt  time.Time
+  }
 
-  ancestorKey := datastore.NewKey(c, "Diary", u.Email, 0, nil)
-
-  var diary Diary
-  err := datastore.Get(c, ancestorKey, &diary)
+  index, err := search.Open("diaryEntries")
   if err != nil {
     http.Error(w, err.Error(), http.StatusInternalServerError)
     return
   }
 
-  diaryEntry2, err2 := diaryEntryOneYearAgo(c, u.Email)
-  content := diaryEntry2.Content
-  c.Infof("Got content: %s. error: %s", content, err2)
+  // newID, err := index.Put(c, "", &Doc{
+  //   Author:       "gopher",
+  //   Diary:        "x",
+  //   DiaryEntry:   "y",
+  //   Content:      "the truth of the matter",
+  //   CreatedAt:    time.Now().UTC(),
+  // })
+  // if err != nil {
+  //   http.Error(w, err.Error(), http.StatusInternalServerError)
+  //   return
+  // }
+  // c.Infof("Got document: %s", newID)
+
+
+  q := datastore.NewQuery("DiaryEntry").
+      Order("-CreatedAt")
+    for t := q.Run(c); ; {
+        var x DiaryEntry
+        key, err := t.Next(&x)
+        if err == datastore.Done {
+            break
+        }
+        if err != nil {
+            http.Error(w, err.Error(), http.StatusInternalServerError)
+            return
+        }
+        c.Infof("Key=%v\nWidget=%#v\n\n", key, x)
+
+        newID, err := index.Put(c, "", &Doc{
+          Author:       "test@example.com",
+          DiaryEntry:   "y",
+          Content:      x.Content,
+          CreatedAt:    x.CreatedAt,
+        })
+        if err != nil {
+          http.Error(w, err.Error(), http.StatusInternalServerError)
+          return
+        }
+
+        c.Infof("Got document: %s", newID)
+    }
+
+    c.Infof("Done")
+
+
+  // ancestorKey := datastore.NewKey(c, "Diary", "test@example.com", 0, nil)
+
+  // diaryEntry := DiaryEntry {
+  //   CreatedAt: time.Now().UTC(),
+  //   Content: "Whatever",
+  // }
+
+  // key := datastore.NewIncompleteKey(c, "DiaryEntry", ancestorKey)
+  // _, err3 := datastore.Put(c, key, &diaryEntry)
+  // if err3 != nil {
+  //   http.Error(w, err3.Error(), http.StatusInternalServerError)
+  //   return
+  // }
+
+
+  // var doc Doc
+  // err := index.Get(c, newID, &doc)
+  // if err != nil {
+  //   http.Error(w, err.Error(), http.StatusInternalServerError)
+  //   return
+  // }
+
+  // for t := index.Search(c, "Comment:truth", nil); ; {
+  //   var doc Doc
+  //   id, err := t.Next(&doc)
+  //   if err == search.Done {
+  //     break
+  //   }
+  //   if err != nil {
+  //     return err
+  //   }
+  //   fmt.Fprintf(w, "%s -> %#v\n", id, doc)
+  // }  
+
+  return
+
+  // u := user.Current(c)
+
+  // ancestorKey := datastore.NewKey(c, "Diary", u.Email, 0, nil)
+
+  // var diary Diary
+  // err := datastore.Get(c, ancestorKey, &diary)
+  // if err != nil {
+  //   http.Error(w, err.Error(), http.StatusInternalServerError)
+  //   return
+  // }
+
+  // diaryEntry2, err2 := diaryEntryOneYearAgo(c, u.Email)
+  // content := diaryEntry2.Content
+  // c.Infof("Got content: %s. error: %s", content, err2)
 
   // year, month, day := time.Now().UTC().AddDate(-1, 0, 0).Date()
   // oneYearAgo := time.Date(year, month, day, 0, 0, 0, 0,  time.UTC)
@@ -394,21 +536,21 @@ func write(w http.ResponseWriter, r *http.Request) {
   //   c.Infof("Got content: %s", content)
   // }
 
-  return
+  // return
 
-  diaryEntry := DiaryEntry {
-    CreatedAt: time.Now().UTC(),
-    Content: "Whatever",
-  }
+  // diaryEntry := DiaryEntry {
+  //   CreatedAt: time.Now().UTC(),
+  //   Content: "Whatever",
+  // }
 
-  key := datastore.NewIncompleteKey(c, "DiaryEntry", ancestorKey)
-  _, err3 := datastore.Put(c, key, &diaryEntry)
-  if err3 != nil {
-    http.Error(w, err3.Error(), http.StatusInternalServerError)
-    return
-  }
+  // key := datastore.NewIncompleteKey(c, "DiaryEntry", ancestorKey)
+  // _, err3 := datastore.Put(c, key, &diaryEntry)
+  // if err3 != nil {
+  //   http.Error(w, err3.Error(), http.StatusInternalServerError)
+  //   return
+  // }
 
-  http.Redirect(w, r, "/diary", http.StatusFound)
+  // http.Redirect(w, r, "/diary", http.StatusFound)
 }
 
 func dailyMail(w http.ResponseWriter, r *http.Request) {
@@ -444,7 +586,7 @@ func dailyMail(w http.ResponseWriter, r *http.Request) {
     var yearOldDiaryEntryContent string
     
     if yearOldDiaryEntry, err := diaryEntryOneYearAgo(c, diary.Author); err == nil {
-      yearOldDiaryEntryContent = fmt.Sprintf("Remember this? One year ago you wrote...<br><br>%s<br><br>", yearOldDiaryEntry.Content)
+      yearOldDiaryEntryContent = fmt.Sprintf("Remember this? One year ago you wrote...<br><br>%s<br><br>", strings.Replace(yearOldDiaryEntry.Content, "\n", "<br>", -1))
     } else {
       yearOldDiaryEntryContent = ""
     }
