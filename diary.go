@@ -166,6 +166,7 @@ func init() {
 
     r.HTML(200, "settings", data)
   })
+  m.Get("/about", PagesControllerIndex)
   http.Handle("/", m)  
 }
 
@@ -345,8 +346,7 @@ func apiSearchesPage(w http.ResponseWriter, r *http.Request) {
     }
 
     c.Infof("Done with search for %s", query)
-  }
-  else {
+  } else {
     // http.Redirect(w, r, "/", http.StatusNotFound)
   }
 
