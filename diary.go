@@ -595,7 +595,7 @@ func dailyMail(w http.ResponseWriter, r *http.Request) {
     today := time.Now().UTC().Format(layout)
 
     msg := &appmail.Message{
-      Sender:   "Diary Support <" + fmt.Sprintf(REPLY_TO_ADDRESS, token) + ">",
+      Sender:   "OhDiary <" + fmt.Sprintf(REPLY_TO_ADDRESS, token) + ">",
       To:       []string{diary.Author},
       Subject:  fmt.Sprintf("It's %s - How did your day go?", today),
       Body:     fmt.Sprintf(dailyMailMessage, yearOldDiaryEntryContent, token),
