@@ -136,7 +136,7 @@ func init() {
 
     ancestorKey := datastore.NewKey(c, "Diary", u.Email, 0, nil)
 
-    q := datastore.NewQuery("DiaryEntry").Ancestor(ancestorKey).Order("-CreatedAt").Limit(1)
+    q := datastore.NewQuery("DiaryEntry").Ancestor(ancestorKey).Order("-CreatedAt").Limit(7)
     var diaryEntries []DiaryEntry
     _, err := q.GetAll(c, &diaryEntries)
     if err != nil {
@@ -403,18 +403,18 @@ func diaryEntryOneYearAgo(c appengine.Context, emailAddress string) (DiaryEntry,
 func test(w http.ResponseWriter, r *http.Request) {
   c := appengine.NewContext(r)
 
-  type Doc struct {
-    Author     string
-    DiaryEntry string
-    Content    string
-    CreatedAt  time.Time
-  }
+  // type Doc struct {
+  //   Author     string
+  //   DiaryEntry string
+  //   Content    string
+  //   CreatedAt  time.Time
+  // }
 
-  index, err := search.Open("diaryEntries")
-  if err != nil {
-    http.Error(w, err.Error(), http.StatusInternalServerError)
-    return
-  }
+  // index, err := search.Open("diaryEntries")
+  // if err != nil {
+  //   http.Error(w, err.Error(), http.StatusInternalServerError)
+  //   return
+  // }
 
   // newID, err := index.Put(c, "", &Doc{
   //   Author:       "gopher",
@@ -430,50 +430,53 @@ func test(w http.ResponseWriter, r *http.Request) {
   // c.Infof("Got document: %s", newID)
 
 
-  q := datastore.NewQuery("DiaryEntry").
-      Order("-CreatedAt")
-    for t := q.Run(c); ; {
-        var x DiaryEntry
-        key, err := t.Next(&x)
-        if err == datastore.Done {
-            break
-        }
-        if err != nil {
-            http.Error(w, err.Error(), http.StatusInternalServerError)
-            return
-        }
-        c.Infof("Key=%v\nWidget=%#v\n\n", key, x)
+  // q := datastore.NewQuery("DiaryEntry").
+  //     Order("-CreatedAt")
+  //   for t := q.Run(c); ; {
+  //       var x DiaryEntry
+  //       key, err := t.Next(&x)
+  //       if err == datastore.Done {
+  //           break
+  //       }
+  //       if err != nil {
+  //           http.Error(w, err.Error(), http.StatusInternalServerError)
+  //           return
+  //       }
+  //       c.Infof("Key=%v\nWidget=%#v\n\n", key, x)
 
-        newID, err := index.Put(c, "", &Doc{
-          Author:       "test@example.com",
-          DiaryEntry:   "y",
-          Content:      x.Content,
-          CreatedAt:    x.CreatedAt,
-        })
-        if err != nil {
-          http.Error(w, err.Error(), http.StatusInternalServerError)
-          return
-        }
+  //       newID, err := index.Put(c, "", &Doc{
+  //         Author:       "test@example.com",
+  //         DiaryEntry:   "y",
+  //         Content:      x.Content,
+  //         CreatedAt:    x.CreatedAt,
+  //       })
+  //       if err != nil {
+  //         http.Error(w, err.Error(), http.StatusInternalServerError)
+  //         return
+  //       }
 
-        c.Infof("Got document: %s", newID)
-    }
+  //       c.Infof("Got document: %s", newID)
+  //   }
 
-    c.Infof("Done")
+  //   c.Infof("Done")
 
 
-  // ancestorKey := datastore.NewKey(c, "Diary", "test@example.com", 0, nil)
+  ancestorKey := datastore.NewKey(c, "Diary", "test@example.com", 0, nil)
 
-  // diaryEntry := DiaryEntry {
-  //   CreatedAt: time.Now().UTC(),
-  //   Content: "Whatever",
-  // }
+  diaryEntry := DiaryEntry {
+    CreatedAt: time.Now().UTC(),
+    Content: "lorem ipsum",
+  }
 
-  // key := datastore.NewIncompleteKey(c, "DiaryEntry", ancestorKey)
-  // _, err3 := datastore.Put(c, key, &diaryEntry)
-  // if err3 != nil {
-  //   http.Error(w, err3.Error(), http.StatusInternalServerError)
-  //   return
-  // }
+  key := datastore.NewIncompleteKey(c, "DiaryEntry", ancestorKey)
+  _, err3 := datastore.Put(c, key, &diaryEntry)
+  if err3 != nil {
+    http.Error(w, err3.Error(), http.StatusInternalServerError)
+    return
+  }
+
+  c.Infof("Created entry")
+  return
 
 
   // var doc Doc
