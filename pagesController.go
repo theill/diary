@@ -15,6 +15,17 @@ func PagesControllerIndex(r render.Render, req *http.Request) {
   c := appengine.NewContext(req)
 
   u := user.Current(c)
+  if u == nil {
+    data := struct {
+      CurrentUser string
+    } {
+      "",
+    }
+
+    r.HTML(200, "pages/index", data)
+    return
+  }
+
   c.Infof("User: %s", u)
 
   data := struct {

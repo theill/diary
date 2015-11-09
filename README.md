@@ -10,4 +10,5 @@ Run `$ goapp serve`
 
 ## Deploy updated version
 
-Run `$ goapp deploy -oauth` 
+Run `$ goapp deploy`
+

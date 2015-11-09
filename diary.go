@@ -401,7 +401,6 @@ func diaryEntryOneYearAgo(c appengine.Context, emailAddress string) (DiaryEntry,
 
 // for testing purposes
 func test(w http.ResponseWriter, r *http.Request) {
-  c := appengine.NewContext(r)
 
   // type Doc struct {
   //   Author     string
@@ -460,22 +459,23 @@ func test(w http.ResponseWriter, r *http.Request) {
 
   //   c.Infof("Done")
 
+  // c := appengine.NewContext(r)
 
-  ancestorKey := datastore.NewKey(c, "Diary", "test@example.com", 0, nil)
+  // ancestorKey := datastore.NewKey(c, "Diary", "test@example.com", 0, nil)
 
-  diaryEntry := DiaryEntry {
-    CreatedAt: time.Now().UTC(),
-    Content: "lorem ipsum",
-  }
+  // diaryEntry := DiaryEntry {
+  //   CreatedAt: time.Now().UTC(),
+  //   Content: "lorem ipsum",
+  // }
 
-  key := datastore.NewIncompleteKey(c, "DiaryEntry", ancestorKey)
-  _, err3 := datastore.Put(c, key, &diaryEntry)
-  if err3 != nil {
-    http.Error(w, err3.Error(), http.StatusInternalServerError)
-    return
-  }
+  // key := datastore.NewIncompleteKey(c, "DiaryEntry", ancestorKey)
+  // _, err3 := datastore.Put(c, key, &diaryEntry)
+  // if err3 != nil {
+  //   http.Error(w, err3.Error(), http.StatusInternalServerError)
+  //   return
+  // }
 
-  c.Infof("Created entry")
+  // c.Infof("Created entry")
   return
 
 
