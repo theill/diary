@@ -321,9 +321,9 @@ func apiSearchesPage(w http.ResponseWriter, r *http.Request) {
 
     w.Header().Set("Content-Type", "application/json")
 
-    for t := index.Search(c, query, nil); ; {
+    for t := index.Search(c, fmt.Sprint("Author = \"", u.Email, "\" AND Content = \"", query, "\""), nil); ; {
       var doc DiaryEntry
-      id, err := t.Next(&doc)
+      _, err := t.Next(&doc)
       if err == search.Done {
         break
       }
@@ -331,7 +331,7 @@ func apiSearchesPage(w http.ResponseWriter, r *http.Request) {
         http.Error(w, err.Error(), http.StatusInternalServerError)
         return
       }
-      c.Infof("%s -> %#v\n", id, doc.Content)
+      // c.Infof("%s -> %#v\n", id, doc.Content)
 
       js, err := json.Marshal(doc)
       if err != nil {
@@ -341,7 +341,7 @@ func apiSearchesPage(w http.ResponseWriter, r *http.Request) {
       w.Write(js)
     }
 
-    c.Infof("Done with search for %s", query)
+    c.Infof("Done with search for '%s'", query)
   } else {
     // http.Redirect(w, r, "/", http.StatusNotFound)
   }
@@ -397,19 +397,19 @@ func diaryEntryOneYearAgo(c appengine.Context, emailAddress string) (DiaryEntry,
 
 // for testing purposes
 func test(w http.ResponseWriter, r *http.Request) {
+  c := appengine.NewContext(r)
 
-  // type Doc struct {
-  //   Author     string
-  //   DiaryEntry string
-  //   Content    string
-  //   CreatedAt  time.Time
-  // }
+  type Doc struct {
+    Author     string
+    Content    string
+    CreatedAt  time.Time
+  }
 
-  // index, err := search.Open("diaryEntries")
-  // if err != nil {
-  //   http.Error(w, err.Error(), http.StatusInternalServerError)
-  //   return
-  // }
+  index, err := search.Open("diaryEntries")
+  if err != nil {
+    http.Error(w, err.Error(), http.StatusInternalServerError)
+    return
+  }
 
   // newID, err := index.Put(c, "", &Doc{
   //   Author:       "gopher",
@@ -424,36 +424,46 @@ func test(w http.ResponseWriter, r *http.Request) {
   // }
   // c.Infof("Got document: %s", newID)
 
+  diaryQuery := datastore.NewQuery("Diary")
+  for t1 := diaryQuery.Run(c); ; {
+    var diaryRecord Diary
+    diaryKey, diaryErr := t1.Next(&diaryRecord)
+    if diaryErr == datastore.Done {
+      break
+    }
+    if diaryErr != nil {
+      http.Error(w, diaryErr.Error(), http.StatusInternalServerError)
+      return
+    }
 
-  // q := datastore.NewQuery("DiaryEntry").
-  //     Order("-CreatedAt")
-  //   for t := q.Run(c); ; {
-  //       var x DiaryEntry
-  //       key, err := t.Next(&x)
-  //       if err == datastore.Done {
-  //           break
-  //       }
-  //       if err != nil {
-  //           http.Error(w, err.Error(), http.StatusInternalServerError)
-  //           return
-  //       }
-  //       c.Infof("Key=%v\nWidget=%#v\n\n", key, x)
+    q := datastore.NewQuery("DiaryEntry").Order("-CreatedAt")
+    for t := q.Run(c); ; {
+      var x DiaryEntry
+      key, err := t.Next(&x)
+      if err == datastore.Done {
+          break
+      }
+      if err != nil {
+          http.Error(w, err.Error(), http.StatusInternalServerError)
+          return
+      }
+      // c.Infof("Key=%v\nWidget=%#v\n\n", key, x)
 
-  //       newID, err := index.Put(c, "", &Doc{
-  //         Author:       "test@example.com",
-  //         DiaryEntry:   "y",
-  //         Content:      x.Content,
-  //         CreatedAt:    x.CreatedAt,
-  //       })
-  //       if err != nil {
-  //         http.Error(w, err.Error(), http.StatusInternalServerError)
-  //         return
-  //       }
+      newID, err := index.Put(c, "", &Doc{
+        Author:      diaryRecord.Author,
+        Content:      x.Content,
+        CreatedAt:    x.CreatedAt,
+      })
+      if err != nil {
+        http.Error(w, err.Error(), http.StatusInternalServerError)
+        return
+      }
 
-  //       c.Infof("Got document: %s", newID)
-  //   }
+      c.Infof("Created document %s from %v", newID, key)
+    }
 
-  //   c.Infof("Done")
+    c.Infof("Done with one diary %s from author", diaryKey, diaryRecord.Author)
+  }
 
   // c := appengine.NewContext(r)
 
@@ -472,7 +482,7 @@ func test(w http.ResponseWriter, r *http.Request) {
   // }
 
   // c.Infof("Created entry")
-  return
+  // return
 
 
   // var doc Doc
@@ -494,7 +504,7 @@ func test(w http.ResponseWriter, r *http.Request) {
   //   fmt.Fprintf(w, "%s -> %#v\n", id, doc)
   // }  
 
-  return
+  // return
 
   // u := user.Current(c)
 
