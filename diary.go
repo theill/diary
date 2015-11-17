@@ -132,7 +132,7 @@ func init() {
 
     ancestorKey := datastore.NewKey(c, "Diary", u.Email, 0, nil)
 
-    q := datastore.NewQuery("DiaryEntry").Ancestor(ancestorKey).Order("-CreatedAt").Limit(7)
+    q := datastore.NewQuery("DiaryEntry").Ancestor(ancestorKey).Order("-CreatedAt").Limit(30)
     var diaryEntries []DiaryEntry
     _, err := q.GetAll(c, &diaryEntries)
     if err != nil {
