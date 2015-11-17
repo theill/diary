@@ -4,7 +4,7 @@
     <p class="lead">
       <!-- Saturday, September 20, 2014 -->
       {{ .CreatedAt | formattedDiaryEntryDate }}
-      <pre>{{ .Content | html }}</pre>
+      <p>{{ .Content | html }}</p>
     </p>
   {{ end }}
 </div>

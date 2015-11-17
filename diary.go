@@ -96,10 +96,6 @@ func init() {
   }))
   m.Use(martini.Logger())
   m.Get("/", func(r render.Render, req *http.Request) {
-    // c := appengine.NewContext(req)
-
-    // u := user.Current(c)
-    
     data := struct {
       CurrentUser   string
     } {
