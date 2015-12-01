@@ -13,7 +13,7 @@ import (
   "crypto/md5"
   "regexp"
   "errors"
-  "encoding/json"
+  // "encoding/json"
 
   "github.com/go-martini/martini"
   "github.com/martini-contrib/render"
@@ -321,9 +321,19 @@ func apiSearchesPage(w http.ResponseWriter, r *http.Request) {
 
     w.Header().Set("Content-Type", "application/json")
 
-    for t := index.Search(c, fmt.Sprint("Author = \"", u.Email, "\" AND Content = \"", query, "\""), nil); ; {
-      var doc DiaryEntry
-      _, err := t.Next(&doc)
+    searchQuery := fmt.Sprint("Author = \"", u.Email, "\" AND Content = \"", query, "\"")
+    searchOptions := search.SearchOptions{
+      Sort: &search.SortOptions{
+        Expressions: nil, // Expr
+      },
+    }
+
+    c.Infof("Performing search of %s", searchQuery)
+    for t := index.Search(c, searchQuery, &searchOptions); ; {
+      c.Infof("Found results")
+
+      var diaryEntry DiaryEntry
+      _, err := t.Next(&diaryEntry)
       if err == search.Done {
         break
       }
@@ -331,14 +341,25 @@ func apiSearchesPage(w http.ResponseWriter, r *http.Request) {
         http.Error(w, err.Error(), http.StatusInternalServerError)
         return
       }
-      // c.Infof("%s -> %#v\n", id, doc.Content)
+      // c.Infof("%s -> %#v\n", id, diaryEntry.Content)
 
-      js, err := json.Marshal(doc)
-      if err != nil {
-        http.Error(w, err.Error(), http.StatusInternalServerError)
-        return
+      const layout = "2006-01-02" // based on `Mon Jan 2 15:04:05 MST 2006`
+      today := diaryEntry.CreatedAt.Format(layout)
+
+      occurencies := strings.Count(diaryEntry.Content, query)
+      if occurencies > 0 {
+        c.Infof("Found %d occurencies of query", occurencies)
+
+        jsx := []byte(fmt.Sprintf(`{"CreatedAt": "%s", "Occurencies": %d}`, today, occurencies))
+        w.Write(jsx)
       }
-      w.Write(js)
+
+      // js, err := json.Marshal(diaryEntry)
+      // if err != nil {
+      //   http.Error(w, err.Error(), http.StatusInternalServerError)
+      //   return
+      // }
+      // w.Write(js)
     }
 
     c.Infof("Done with search for '%s'", query)
@@ -600,7 +621,7 @@ func dailyMail(w http.ResponseWriter, r *http.Request) {
       yearOldDiaryEntryContent = ""
     }
 
-    const layout = "Monday, Jan 2"
+    const layout = "Monday, Jan 2" // based on `Mon Jan 2 15:04:05 MST 2006`
     today := time.Now().UTC().Format(layout)
 
     msg := &appmail.Message{

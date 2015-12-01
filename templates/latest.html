@@ -1,3 +1,49 @@
+ <script type="text/javascript"
+          src="https://www.google.com/jsapi?autoload={
+            'modules':[{
+              'name':'visualization',
+              'version':'1',
+              'packages':['corechart']
+            }]
+          }"></script>
+
+    <script type="text/javascript">
+      google.setOnLoadCallback(drawChart);
+
+      function drawChart() {
+        var data = google.visualization.arrayToDataTable([
+          ['Month', 'Sales'],
+          ['2004/10',  1000],
+          ['2004/11',  100],
+          ['2004/12',  900],
+          ['2005/1',  1200],
+          ['2005/2',  1500],
+          ['2005/3',  1000],
+          ['2005/4',  400],
+          ['2005/5',  1000],
+          ['2005/6',  1000],
+          ['2005/7',  1000],
+          ['2005/8',  1000],
+          ['2005/9',  1000],
+          ['2005/10',  1000],
+          ['2005/11',  1000],
+          ['2005/12',  1000],
+        ]);
+
+        var options = {
+          title: 'Queries for <Foo>',
+          curveType: 'function',
+          legend: { position: 'bottom' }
+        };
+
+        var chart = new google.visualization.LineChart(document.getElementById('curve_chart'));
+
+        chart.draw(data, options);
+      }
+    </script>
+
+    <div id="curve_chart" style="width: 900px; height: 500px"></div>
+
 <div class="inner cover">
   <h1 class="cover-heading">Latest</h1>
   {{ range .DiaryEntries }}
