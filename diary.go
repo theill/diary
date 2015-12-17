@@ -10,9 +10,9 @@ import (
   "time"
   // "bytes"
   "strings"
-  "crypto/md5"
   "regexp"
   "errors"
+  "crypto/rand"
   // "encoding/json"
 
   "github.com/go-martini/martini"
@@ -249,6 +249,12 @@ func settingsPage(w http.ResponseWriter, r *http.Request) {
   t.Execute(w, nil)
 }
 
+func randToken() string {
+  b := make([]byte, 16)
+  rand.Read(b)
+  return fmt.Sprintf("%x", b)
+}
+
 func signupPage(w http.ResponseWriter, r *http.Request) {
   c := appengine.NewContext(r)
 
@@ -274,7 +280,7 @@ func signupPage(w http.ResponseWriter, r *http.Request) {
     g := Diary {
       CreatedAt: time.Now().UTC(),
       Author: u.Email,
-      Token: fmt.Sprintf("%x", md5.New().Sum(nil)),
+      Token: randToken(),
     }
 
     key := datastore.NewKey(c, "Diary", u.Email, 0, nil)
