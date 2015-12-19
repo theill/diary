@@ -617,8 +617,6 @@ func dailyMail(w http.ResponseWriter, r *http.Request) {
       continue
     }
 
-    token := diary.Token
-
     var yearOldDiaryEntryContent string
     
     if yearOldDiaryEntry, err := diaryEntryOneYearAgo(c, diary.Author); err == nil {
@@ -631,11 +629,11 @@ func dailyMail(w http.ResponseWriter, r *http.Request) {
     today := time.Now().UTC().Format(layout)
 
     msg := &appmail.Message{
-      Sender:   "OhDiary <" + fmt.Sprintf(REPLY_TO_ADDRESS, token) + ">",
+      Sender:   "OhDiary <" + fmt.Sprintf(REPLY_TO_ADDRESS, diary.Token) + ">",
       To:       []string{diary.Author},
       Subject:  fmt.Sprintf("It's %s - How did your day go?", today),
-      Body:     fmt.Sprintf(dailyMailMessage, yearOldDiaryEntryContent, token),
-      HTMLBody: fmt.Sprintf(dailyHtmlMailMessage, yearOldDiaryEntryContent, token),
+      Body:     fmt.Sprintf(dailyMailMessage, yearOldDiaryEntryContent, diary.Token),
+      HTMLBody: fmt.Sprintf(dailyHtmlMailMessage, yearOldDiaryEntryContent, diary.Token),
     }
     if err := appmail.Send(c, msg); err != nil {
       c.Errorf("Couldn't send email: %v", err)
@@ -650,7 +648,7 @@ func dailyMail(w http.ResponseWriter, r *http.Request) {
     //   c.Errorf("Couldn't send email: %v", err)
     // }
 
-    c.Infof("Daily mail send to %s", diary.Author)
+    c.Infof("Daily mail send to %s using token %s", diary.Author, diary.Token)
   }
 }
 
