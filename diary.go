@@ -273,7 +273,7 @@ func signupPage(w http.ResponseWriter, r *http.Request) {
   ancestorKey := datastore.NewKey(c, "Diary", u.Email, 0, nil)
 
   var diary Diary
-  err := datastore.Get(c, ancestorKey, diary)
+  err := datastore.Get(c, ancestorKey, &diary)
   if err != nil {
     c.Infof("New User found for %s because err %s != null", u.Email, err)
 
