@@ -275,7 +275,7 @@ func signupPage(w http.ResponseWriter, r *http.Request) {
   var diary *Diary
   err := datastore.Get(c, ancestorKey, diary)
   if err != nil {
-    // new user
+    c.Infof("New User found for %s because err %s != null", u.Email, err)
 
     g := Diary {
       CreatedAt: time.Now().UTC(),
